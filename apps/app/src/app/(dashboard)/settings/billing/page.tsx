@@ -1,1 +1,1 @@
-﻿// Billing settings — implement in Phase 2
+/ Billing settings — implement in Phase 2

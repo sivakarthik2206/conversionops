@@ -1,1 +1,1 @@
-﻿// Terms of service — add Termly.io embed
+/ Terms of service — add Termly.io embed

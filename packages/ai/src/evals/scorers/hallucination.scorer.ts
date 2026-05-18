@@ -1,1 +1,1 @@
-﻿// Hallucination scorer — implement in Phase 8
+/ Hallucination scorer — implement in Phase 8

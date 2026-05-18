@@ -1,1 +1,1 @@
-﻿// Magic link auth — implement in Phase 2
+/ Magic link auth — implement in Phase 2

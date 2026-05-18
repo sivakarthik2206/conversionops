@@ -1,1 +1,1 @@
-﻿// Qualification processor — implement in Phase 5
+/ Qualification processor — implement in Phase 5

@@ -1,1 +1,1 @@
-﻿// Resend email client — implement in Phase 5
+/ Resend email client — implement in Phase 5

@@ -1,1 +1,1 @@
-﻿// Zustand workspace store — implement in Phase 7
+/ Zustand workspace store — implement in Phase 7

@@ -1,1 +1,1 @@
-﻿// Conversations hook — implement in Phase 7
+/ Conversations hook — implement in Phase 7

@@ -1,2 +1,2 @@
-﻿export * from "./tcpa";
+xport * from "./tcpa";
 export * from "./fair-housing";

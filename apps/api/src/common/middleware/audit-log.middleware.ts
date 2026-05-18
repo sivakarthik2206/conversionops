@@ -1,1 +1,1 @@
-﻿// Audit log middleware — implement in Phase 3
+/ Audit log middleware — implement in Phase 3

@@ -1,0 +1,871 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  SOLO
+  BROKERAGE
+  ENTERPRISE
+}
+
+enum WorkspaceStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+  SUSPENDED
+  CANCELLED
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+  VIEWER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFYING
+  QUALIFIED
+  ROUTING
+  ASSIGNED
+  APPOINTMENT_REQUESTED
+  APPOINTMENT_SCHEDULED
+  CONVERTED
+  OPT_OUT
+  DISQUALIFIED
+  UNRESPONSIVE
+  DORMANT
+  REACTIVATED
+}
+
+enum LeadTier {
+  UNQUALIFIED
+  COLD
+  WARM
+  HOT
+  PRIORITY
+}
+
+enum LeadSource {
+  ZILLOW
+  REALTOR_COM
+  WEB_FORM
+  MISSED_CALL
+  SMS_INBOUND
+  MANUAL
+  REACTIVATION
+  REFERRAL
+  OTHER
+}
+
+enum ConversationStatus {
+  AI_ACTIVE
+  HUMAN_ACTIVE
+  APPOINTMENT_PENDING
+  COMPLETED
+  OPT_OUT
+  DORMANT
+}
+
+enum EscalationLevel {
+  NONE
+  FLAGGED
+  ESCALATED
+  URGENT
+}
+
+enum MessageRole {
+  AI
+  HUMAN
+  SYSTEM
+}
+
+enum Channel {
+  SMS
+  EMAIL
+  CHAT_WIDGET
+  VOICE
+}
+
+enum AppointmentStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  RESCHEDULED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ConsentStatus {
+  PENDING
+  OPTED_IN
+  OPTED_OUT
+  REVOKED
+}
+
+enum ConsentChannel {
+  SMS
+  EMAIL
+  VOICE
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+}
+
+enum NotificationType {
+  HOT_LEAD_ALERT
+  APPOINTMENT_BOOKED
+  AGENT_TAKEOVER_REQUEST
+  AI_ESCALATION
+  MISSED_CALL_RECOVERY
+  REACTIVATION_SUCCESS
+  AI_PAUSED_ALERT
+  QUOTA_WARNING
+  BILLING_ALERT
+  OPS_ALERT
+}
+
+enum WorkflowStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PAUSED
+}
+
+enum WorkflowEventType {
+  STARTED
+  STEP_COMPLETED
+  STEP_FAILED
+  RETRYING
+  PAUSED
+  RESUMED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RoutingStrategy {
+  ROUND_ROBIN
+  PERFORMANCE_BASED
+  GEOGRAPHY
+  LANGUAGE
+  AVAILABILITY
+  CUSTOM
+}
+
+enum AIEvalStatus {
+  PENDING
+  SCORED
+  FAILED
+}
+
+model Workspace {
+  id     String          @id @default(cuid())
+  name   String
+  slug   String          @unique
+  plan   Plan            @default(SOLO)
+  status WorkspaceStatus @default(ONBOARDING)
+
+  ownerEmail  String
+  ownerPhone  String?
+  timezone    String  @default("America/New_York")
+  locale      String  @default("en-US")
+
+  twilioNumber        String?  @unique
+  twilioNumberSid     String?
+  twilioSubaccountSid String?
+
+  aiConfig Json @default("{}")
+
+  tokenUsageCurrentMonth Int      @default(0)
+  tokenQuotaMonthly      Int      @default(2000000)
+  tokenQuotaAlertSentAt  DateTime?
+  aiPaused               Boolean  @default(false)
+  aiPausedAt             DateTime?
+  aiPausedBy             String?
+  aiPauseReason          String?
+
+  featureFlags Json @default("{}")
+
+  onboardingStep        Int       @default(1)
+  onboardingCompletedAt DateTime?
+
+  deletedAt       DateTime?
+  retentionPolicy Json      @default("{}")
+
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+  billingEmail         String?
+  trialEndsAt          DateTime?
+  cancelledAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              WorkspaceUser[]
+  leads              Lead[]
+  conversations      Conversation[]
+  appointments       Appointment[]
+  routingRules       RoutingRule[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  consentRecords     ConsentRecord[]
+  featureFlagOverrides FeatureFlagOverride[]
+  aiUsageRecords     AIUsageRecord[]
+  workflowExecutions WorkflowExecution[]
+  idempotencyKeys    IdempotencyKey[]
+  operationalMetrics OperationalMetric[]
+
+  @@index([status])
+  @@index([plan])
+  @@index([deletedAt])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  phone         String?
+  avatarUrl     String?
+  emailVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+
+  magicLinkToken     String?   @unique
+  magicLinkExpiresAt DateTime?
+
+  deletedAt   DateTime?
+  suspendedAt DateTime?
+  suspendedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaces WorkspaceUser[]
+  auditLogs  AuditLog[]
+
+  @@index([email])
+  @@index([deletedAt])
+}
+
+model WorkspaceUser {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        UserRole @default(AGENT)
+  isActive    Boolean  @default(true)
+
+  displayName     String?
+  bio             String?
+  specializations String[] @default([])
+  languages       String[] @default(["en"])
+  serviceAreas    String[] @default([])
+
+  totalLeadsAssigned Int   @default(0)
+  totalConversions   Int   @default(0)
+  avgResponseTimeMs  Int?
+  conversionRate     Float @default(0)
+
+  isAvailable      Boolean   @default(true)
+  unavailableUntil DateTime?
+
+  notifyOnNewLead    Boolean @default(true)
+  notifyOnHotLead    Boolean @default(true)
+  notifyOnEscalation Boolean @default(true)
+  notifyChannel      Channel @default(SMS)
+
+  removedAt DateTime?
+  removedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedLeads LeadAssignment[]
+  routingRules  RoutingRule[]    @relation("AgentRoutingRules")
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, role])
+  @@index([workspaceId, isActive])
+  @@index([workspaceId, conversionRate])
+  @@index([userId])
+}
+
+model Lead {
+  id          String     @id @default(cuid())
+  workspaceId String
+  source      LeadSource
+  externalId  String?
+  referenceId String?
+
+  name     String?
+  phone    String?
+  email    String?
+  fullName String?
+
+  status LeadStatus @default(NEW)
+  tier   LeadTier   @default(UNQUALIFIED)
+  score  Int        @default(0)
+
+  qualification Json @default("{}")
+  sourcePayload Json @default("{}")
+
+  assignedWorkspaceUserId String?
+
+  reactivationCount  Int       @default(0)
+  lastReactivatedAt  DateTime?
+  reactivationSource String?
+
+  aiPausedForLead Boolean @default(false)
+
+  deletedAt    DateTime?
+  piiDeletedAt DateTime?
+  archivedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations  Conversation[]
+  appointments   Appointment[]
+  assignments    LeadAssignment[]
+  events         LeadEvent[]
+  consentRecords ConsentRecord[]
+  notifications  Notification[]
+
+  @@unique([workspaceId, externalId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, tier])
+  @@index([workspaceId, score])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, assignedWorkspaceUserId])
+  @@index([phone])
+  @@index([email])
+  @@index([deletedAt])
+  @@index([source])
+}
+
+model LeadAssignment {
+  id              String  @id @default(cuid())
+  workspaceId     String
+  leadId          String
+  workspaceUserId String
+  isPrimary       Boolean @default(true)
+
+  routingRuleId  String?
+  routingReason  String?
+  routingScore   Float?
+
+  responseTimeMs  Int?
+  wasConverted    Boolean?
+  rejectedAt      DateTime?
+  rejectionReason String?
+
+  assignedAt DateTime  @default(now())
+  releasedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  lead          Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  workspaceUser WorkspaceUser @relation(fields: [workspaceUserId], references: [id])
+  routingRule   RoutingRule?  @relation(fields: [routingRuleId], references: [id])
+
+  @@index([workspaceId, leadId])
+  @@index([workspaceId, workspaceUserId])
+  @@index([workspaceId, assignedAt])
+  @@index([leadId])
+}
+
+model Conversation {
+  id          String             @id @default(cuid())
+  workspaceId String
+  leadId      String
+  channel     Channel            @default(SMS)
+  status      ConversationStatus @default(AI_ACTIVE)
+
+  aiActive    Boolean   @default(true)
+  takenOverBy String?
+  takenOverAt DateTime?
+  releasedAt  DateTime?
+
+  escalationLevel  EscalationLevel @default(NONE)
+  escalationReason String?
+  escalatedAt      DateTime?
+
+  contextSummary String?
+  summarisedUpTo String?
+
+  twilioConversationSid String?
+  fromNumber            String?
+  toNumber              String?
+
+  deletedAt  DateTime?
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, leadId])
+  @@index([workspaceId, createdAt])
+  @@index([leadId])
+  @@index([fromNumber])
+  @@index([toNumber])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  role           MessageRole
+  content        String      @db.Text
+
+  aiMetadata Json?
+
+  providerMessageId String?
+  providerPayload   Json?
+
+  deliveredAt DateTime?
+  readAt      DateTime?
+  failedAt    DateTime?
+  failReason  String?
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  evalResults  AIEvalResult[]
+
+  @@index([conversationId, createdAt])
+  @@index([workspaceId, role])
+  @@index([workspaceId, createdAt])
+  @@index([providerMessageId])
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  workspaceId String
+  leadId      String
+  status      AppointmentStatus @default(PENDING_CONFIRMATION)
+
+  scheduledAt     DateTime
+  durationMinutes Int      @default(60)
+  timezone        String
+  location        String?
+  notes           String?
+
+  workspaceUserId String?
+
+  externalBookingId String?
+  externalPayload   Json?
+  bookingUrl        String?
+
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  rescheduledFrom    String?
+  noShowAt           DateTime?
+
+  crmSyncedAt   DateTime?
+  crmExternalId String?
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledAt])
+  @@index([workspaceId, leadId])
+  @@index([workspaceId, workspaceUserId])
+  @@index([externalBookingId])
+}
+
+model WorkflowExecution {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  leadId       String?
+  workflowName String
+  status       WorkflowStatus @default(PENDING)
+
+  currentState  String?
+  stateSnapshot Json?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  timeoutAt   DateTime?
+
+  lastError   String?
+  retryCount  Int      @default(0)
+  maxRetries  Int      @default(3)
+  nextRetryAt DateTime?
+
+  bullJobId     String?
+  bullQueueName String?
+
+  triggeredBy   String?
+  triggerSource String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    WorkflowEvent[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, workflowName])
+  @@index([workspaceId, leadId])
+  @@index([leadId])
+  @@index([status, nextRetryAt])
+  @@index([bullJobId])
+}
+
+model WorkflowEvent {
+  id                  String            @id @default(cuid())
+  workflowExecutionId String
+  workspaceId         String
+  type                WorkflowEventType
+  fromState           String?
+  toState             String?
+
+  payload  Json @default("{}")
+  metadata Json @default("{}")
+
+  error      String?
+  errorCode  String?
+  errorStack String? @db.Text
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  execution WorkflowExecution @relation(fields: [workflowExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([workflowExecutionId, occurredAt])
+  @@index([workspaceId, type])
+  @@index([workspaceId, occurredAt])
+}
+
+model LeadEvent {
+  id          String @id @default(cuid())
+  workspaceId String
+  leadId      String
+  sequence    Int
+
+  type    String
+  payload Json   @default("{}")
+
+  triggeredBy   String?
+  triggerSource String?
+  correlationId String?
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, sequence])
+  @@index([workspaceId, leadId])
+  @@index([workspaceId, type])
+  @@index([workspaceId, occurredAt])
+  @@index([correlationId])
+}
+
+model ConsentRecord {
+  id          String         @id @default(cuid())
+  workspaceId String
+  leadId      String?
+  phone       String?
+  email       String?
+  channel     ConsentChannel
+  status      ConsentStatus  @default(PENDING)
+
+  consentMethod String?
+  consentText   String?
+  consentSource String?
+  ipAddress     String?
+
+  optedOutAt    DateTime?
+  optOutKeyword String?
+  optOutChannel String?
+
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead?     @relation(fields: [leadId], references: [id])
+
+  @@index([phone, channel, status])
+  @@index([email, channel, status])
+  @@index([workspaceId, status])
+  @@index([workspaceId, leadId])
+  @@index([optedOutAt])
+}
+
+model AIUsageRecord {
+  id          String @id @default(cuid())
+  workspaceId String
+  leadId      String?
+  messageId   String?
+
+  model         String
+  provider      String @default("vertex-ai")
+  promptVersion String?
+
+  inputTokens  Int
+  outputTokens Int
+  totalTokens  Int
+
+  costCents Int @default(0)
+
+  operation    String
+  latencyMs    Int?
+
+  billingMonth Int
+  billingDay   Int
+
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, billingMonth])
+  @@index([workspaceId, createdAt])
+  @@index([billingMonth])
+  @@index([model, billingMonth])
+}
+
+model AIEvalResult {
+  id          String       @id @default(cuid())
+  workspaceId String
+  messageId   String
+  status      AIEvalStatus @default(PENDING)
+
+  evalRunnerVersion String?
+  promptVersion     String?
+  modelVersion      String?
+
+  relevanceScore     Float?
+  hallucinationScore Float?
+  bookingIntentScore Float?
+  qualProgressScore  Float?
+  toneScore          Float?
+  complianceScore    Float?
+  overallScore       Float?
+
+  failReason    String?
+  flaggedIssues Json?
+
+  ciRunId      String?
+  isRegression Boolean @default(false)
+
+  runAt     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, runAt])
+  @@index([messageId])
+  @@index([hallucinationScore])
+  @@index([overallScore])
+  @@index([isRegression])
+  @@index([ciRunId])
+}
+
+model RoutingRule {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  strategy    RoutingStrategy @default(ROUND_ROBIN)
+  priority    Int             @default(0)
+  isActive    Boolean         @default(true)
+
+  conditions Json @default("{}")
+  actions    Json @default("{}")
+  expression String?
+
+  targetUserIds String[] @default([])
+
+  totalRouted Int   @default(0)
+  successRate Float @default(0)
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  targetAgents WorkspaceUser[] @relation("AgentRoutingRules")
+  assignments  LeadAssignment[]
+
+  @@index([workspaceId, isActive, priority])
+  @@index([workspaceId, strategy])
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  workspaceId String
+  leadId      String?
+  type        NotificationType
+  status      NotificationStatus @default(PENDING)
+  channel     Channel
+
+  recipientUserId String?
+  recipientPhone  String?
+  recipientEmail  String?
+
+  subject  String?
+  body     String  @db.Text
+  metadata Json    @default("{}")
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+  failReason  String?
+
+  providerMessageId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead?     @relation(fields: [leadId], references: [id])
+
+  @@index([workspaceId, type, status])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, leadId])
+  @@index([recipientUserId])
+  @@index([status, sentAt])
+}
+
+model IdempotencyKey {
+  id          String            @id @default(cuid())
+  workspaceId String?
+  key         String            @unique
+  source      String
+  status      IdempotencyStatus @default(PROCESSING)
+
+  result    Json?
+  expiresAt DateTime
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([key])
+  @@index([expiresAt])
+  @@index([source, status])
+}
+
+model AuditLog {
+  id          String  @id @default(cuid())
+  workspaceId String?
+  userId      String?
+  role        String?
+
+  action     String
+  resource   String
+  resourceId String?
+
+  oldValue Json?
+  newValue Json?
+  metadata Json  @default("{}")
+
+  ipAddress String?
+  userAgent String?
+  requestId String?
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  deletedAt  DateTime?
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  user      User?      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId, occurredAt])
+  @@index([workspaceId, action])
+  @@index([workspaceId, resource, resourceId])
+  @@index([userId, occurredAt])
+  @@index([occurredAt])
+}
+
+model FeatureFlagOverride {
+  id          String @id @default(cuid())
+  workspaceId String
+  flag        String
+  value       Json
+
+  enabledAt DateTime?
+  enabledBy String?
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, flag])
+  @@index([workspaceId])
+  @@index([flag])
+  @@index([expiresAt])
+}
+
+model OperationalMetric {
+  id          String  @id @default(cuid())
+  workspaceId String?
+  metric      String
+  value       Float
+  unit        String
+  tags        Json    @default("{}")
+
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  deletedAt  DateTime?
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([metric, recordedAt])
+  @@index([workspaceId, metric, recordedAt])
+  @@index([recordedAt])
+}

@@ -1,4 +1,4 @@
-﻿export interface PaginatedQuery {
+xport interface PaginatedQuery {
   cursor?: string;
   limit?: number;
   orderBy?: string;

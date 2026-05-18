@@ -1,4 +1,4 @@
-﻿import { NestFactory } from "@nestjs/core";
+mport { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
 import { logger } from "@conversionops/observability";

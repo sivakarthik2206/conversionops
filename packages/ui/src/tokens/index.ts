@@ -1,4 +1,4 @@
-﻿export const colors = {
+xport const colors = {
   bg:      "#0a0a0b",
   bg2:     "#111114",
   bg3:     "#18181d",

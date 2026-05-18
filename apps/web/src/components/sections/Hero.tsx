@@ -1,1 +1,1 @@
-﻿// Hero section — implement in Phase 7
+/ Hero section — implement in Phase 7

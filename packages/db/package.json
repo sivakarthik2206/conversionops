@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@conversionops/db",
   "version": "0.0.1",
   "private": true,
@@ -9,7 +9,8 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0"

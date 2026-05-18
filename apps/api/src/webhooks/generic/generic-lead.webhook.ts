@@ -1,1 +1,1 @@
-﻿// Generic lead intake — implement in Phase 5
+/ Generic lead intake — implement in Phase 5

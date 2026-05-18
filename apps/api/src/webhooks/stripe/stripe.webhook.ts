@@ -1,1 +1,1 @@
-﻿// Stripe webhook — implement in Phase 2
+/ Stripe webhook — implement in Phase 2

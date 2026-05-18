@@ -1,2 +1,2 @@
-﻿export * from "./logger";
+xport * from "./logger";
 export * from "./health";

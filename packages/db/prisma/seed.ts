@@ -1,10 +1,10 @@
-﻿import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+
 const db = new PrismaClient();
 
 async function main() {
   console.log("Seeding database...");
 
-  // Seed a development workspace
   const workspace = await db.workspace.upsert({
     where: { slug: "demo-brokerage" },
     update: {},
@@ -18,7 +18,7 @@ async function main() {
         agentName: "Alex",
         tone: "professional",
         customInstructions: "",
-        greetingTemplate: "Hi {leadName}! This is {agentName}, assistant to your agent. I saw you were interested in {propertyArea} — how can I help?",
+        greetingTemplate: "Hi {leadName}! This is {agentName}. I saw you were interested in {propertyArea} — how can I help?",
       },
       onboardingStep: 6,
       onboardingCompletedAt: new Date(),

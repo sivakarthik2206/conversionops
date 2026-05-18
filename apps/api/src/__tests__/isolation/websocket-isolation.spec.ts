@@ -1,1 +1,1 @@
-﻿// WebSocket isolation tests — implement in Phase 6
+/ WebSocket isolation tests — implement in Phase 6

@@ -1,1 +1,1 @@
-﻿// Composed components — implement in Phase 7
+/ Composed components — implement in Phase 7

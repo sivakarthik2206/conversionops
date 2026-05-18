@@ -1,1 +1,1 @@
-﻿// BillingModule — implement in Phase 2
+/ BillingModule — implement in Phase 2

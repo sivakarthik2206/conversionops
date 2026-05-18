@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@conversionops/worker",
   "version": "0.0.1",
   "private": true,
@@ -11,10 +11,11 @@
   "dependencies": {
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
-    "@nestjs/bull": "^10.0.0",
     "bullmq": "^5.0.0",
     "ioredis": "^5.0.0",
     "xstate": "^5.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0",
     "@conversionops/db": "workspace:*",
     "@conversionops/ai": "workspace:*",
     "@conversionops/compliance": "workspace:*",

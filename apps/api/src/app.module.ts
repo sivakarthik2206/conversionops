@@ -1,4 +1,4 @@
-﻿import { Module } from "@nestjs/common";
+mport { Module } from "@nestjs/common";
 import { ConfigModule } from "./config/config.module";
 // Modules added phase by phase — see build order
 // Phase 2: PrismaModule, AuthModule, WorkspaceModule

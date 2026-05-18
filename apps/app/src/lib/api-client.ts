@@ -1,1 +1,1 @@
-﻿// Type-safe API client — implement in Phase 7
+/ Type-safe API client — implement in Phase 7

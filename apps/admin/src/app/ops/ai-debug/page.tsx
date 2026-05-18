@@ -1,1 +1,1 @@
-﻿// AI prompt playground — implement in Phase 10
+/ AI prompt playground — implement in Phase 10

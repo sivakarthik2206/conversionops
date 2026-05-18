@@ -1,1 +1,1 @@
-﻿// Onboarding step 6 — implement in Phase 7
+/ Onboarding step 6 — implement in Phase 7

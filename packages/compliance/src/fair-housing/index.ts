@@ -1,4 +1,4 @@
-﻿// Fair Housing Act compliance filter
+/ Fair Housing Act compliance filter
 // Any AI message mentioning property characteristics must pass this check.
 
 const PROHIBITED_PATTERNS = [

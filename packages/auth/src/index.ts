@@ -1,4 +1,4 @@
-﻿export * from "./rbac/roles";
+xport * from "./rbac/roles";
 export * from "./rbac/permissions";
 export * from "./rbac/guard";
 export * from "./jwt";

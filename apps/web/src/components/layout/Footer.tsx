@@ -1,1 +1,1 @@
-﻿// Footer — implement in Phase 7
+/ Footer — implement in Phase 7

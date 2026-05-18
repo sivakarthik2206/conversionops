@@ -1,1 +1,1 @@
-﻿// Workspace endpoints — implement in Phase 2
+/ Workspace endpoints — implement in Phase 2

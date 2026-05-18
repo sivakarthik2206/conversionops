@@ -1,1 +1,1 @@
-﻿// AI configuration — implement in Phase 5
+/ AI configuration — implement in Phase 5

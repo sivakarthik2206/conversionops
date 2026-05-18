@@ -1,1 +1,1 @@
-﻿// Workspace settings — implement in Phase 2
+/ Workspace settings — implement in Phase 2

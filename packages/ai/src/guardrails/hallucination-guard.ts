@@ -1,1 +1,1 @@
-﻿// Hallucination detection — implement in Phase 8
+/ Hallucination detection — implement in Phase 8

@@ -1,1 +1,1 @@
-﻿// Socket.IO realtime hook — implement in Phase 6
+/ Socket.IO realtime hook — implement in Phase 6

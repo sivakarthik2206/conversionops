@@ -1,1 +1,1 @@
-﻿// Conversation endpoints — implement in Phase 3
+/ Conversation endpoints — implement in Phase 3

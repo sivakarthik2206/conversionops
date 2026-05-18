@@ -1,1 +1,1 @@
-﻿// Chart components — implement in Phase 7
+/ Chart components — implement in Phase 7

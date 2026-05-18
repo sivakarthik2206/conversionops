@@ -1,11 +1,10 @@
-﻿{
+{
   "name": "@conversionops/ai",
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
   "dependencies": {
-    "@google-cloud/vertexai": "^1.10.0" ,
-    "google-auth-library": "^9.15.1",
+    "@google-cloud/vertexai": "^1.0.0",
     "@conversionops/compliance": "workspace:*",
     "@conversionops/db": "workspace:*",
     "@conversionops/types": "workspace:*",

@@ -1,1 +1,1 @@
-﻿// GetConversionFunnelQuery — implement in Phase 10
+/ GetConversionFunnelQuery — implement in Phase 10

@@ -1,1 +1,1 @@
-﻿// AI response processor — implement in Phase 5
+/ AI response processor — implement in Phase 5

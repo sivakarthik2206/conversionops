@@ -1,1 +1,1 @@
-﻿// Socket.IO gateway — implement in Phase 6
+/ Socket.IO gateway — implement in Phase 6

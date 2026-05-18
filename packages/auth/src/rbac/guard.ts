@@ -1,1 +1,1 @@
-﻿// RBAC guard utilities — implement in Phase 3
+/ RBAC guard utilities — implement in Phase 3

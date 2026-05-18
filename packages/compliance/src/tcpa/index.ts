@@ -1,4 +1,4 @@
-﻿// TCPA invariants — called before every outbound SMS
+/ TCPA invariants — called before every outbound SMS
 // These are hard-coded rules. Never bypass. Never feature-flag.
 
 export const TCPA_OPT_OUT_KEYWORDS = [

@@ -1,1 +1,1 @@
-﻿// Auth service — implement in Phase 2
+/ Auth service — implement in Phase 2

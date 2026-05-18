@@ -1,4 +1,4 @@
-﻿import { NestFactory } from "@nestjs/core";
+mport { NestFactory } from "@nestjs/core";
 import { WorkerModule } from "./worker.module";
 import { logger } from "@conversionops/observability";
 

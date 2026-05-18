@@ -1,1 +1,1 @@
-﻿// Qualification prompt template — implement in Phase 5
+/ Qualification prompt template — implement in Phase 5

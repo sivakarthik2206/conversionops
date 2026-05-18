@@ -1,1 +1,1 @@
-﻿// Privacy policy — add Termly.io embed
+/ Privacy policy — add Termly.io embed

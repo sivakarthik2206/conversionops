@@ -1,1 +1,1 @@
-﻿// ListConversationsQuery — implement in Phase 3
+/ ListConversationsQuery — implement in Phase 3

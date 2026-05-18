@@ -1,4 +1,4 @@
-﻿export * from "./ai-metadata";
+xport * from "./ai-metadata";
 export * from "./lead-events";
 export * from "./health";
 export * from "./result";

@@ -1,1 +1,1 @@
-﻿// Zustand conversations store — implement in Phase 7
+/ Zustand conversations store — implement in Phase 7

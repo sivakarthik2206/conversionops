@@ -1,1 +1,1 @@
-﻿// Workspace service — implement in Phase 2
+/ Workspace service — implement in Phase 2

@@ -1,1 +1,1 @@
-﻿// GetWorkspaceQuery — implement in Phase 2
+/ GetWorkspaceQuery — implement in Phase 2

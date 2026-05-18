@@ -1,1 +1,1 @@
-﻿// Pricing page — implement in Phase 7
+/ Pricing page — implement in Phase 7

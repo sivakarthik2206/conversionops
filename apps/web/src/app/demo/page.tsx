@@ -1,1 +1,1 @@
-﻿// Interactive demo page — implement in Phase 7
+/ Interactive demo page — implement in Phase 7

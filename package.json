@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "conversionops",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],

@@ -1,1 +1,1 @@
-﻿// GetLeadQuery — implement in Phase 3
+/ GetLeadQuery — implement in Phase 3

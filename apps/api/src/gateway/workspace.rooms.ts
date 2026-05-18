@@ -1,1 +1,1 @@
-﻿// Workspace room management — implement in Phase 6
+/ Workspace room management — implement in Phase 6

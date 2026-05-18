@@ -1,4 +1,4 @@
-﻿// Homepage — the premium marketing site built in the previous step lives here.
+/ Homepage — the premium marketing site built in the previous step lives here.
 // Decompose conversionops-site.html into these section components:
 // Hero, PainPoints, LiveDemo, Features, Pricing, CTA
 

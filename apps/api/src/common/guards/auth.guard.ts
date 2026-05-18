@@ -1,1 +1,1 @@
-﻿// Auth guard — implement in Phase 2
+/ Auth guard — implement in Phase 2

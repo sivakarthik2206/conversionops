@@ -1,4 +1,4 @@
-﻿import { Queue } from "bullmq";
+mport { Queue } from "bullmq";
 import { redisConnection } from "./connection";
 
 export const QUEUE_NAMES = {

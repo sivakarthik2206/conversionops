@@ -1,1 +1,1 @@
-﻿// Global exception filter — implement in Phase 2
+/ Global exception filter — implement in Phase 2
