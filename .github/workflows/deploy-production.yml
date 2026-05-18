@@ -1,0 +1,28 @@
+﻿name: Deploy Production
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "pnpm" }
+      - run: pnpm install
+      - run: pnpm run build
+      - name: Deploy API to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: conversionops-api
+          publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+          package: apps/api
+      - name: Deploy Worker to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: conversionops-worker
+          publish-profile: ${{ secrets.AZURE_WORKER_PUBLISH_PROFILE }}
+          package: apps/worker

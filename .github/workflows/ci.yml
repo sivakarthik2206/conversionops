@@ -1,0 +1,44 @@
+﻿name: CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: conversionops
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: conversionops_test
+        ports: ["5432:5432"]
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "pnpm" }
+      - run: pnpm install
+      - run: pnpm run type-check
+      - run: pnpm run lint
+      - run: pnpm run db:generate
+        env:
+          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
+      - run: pnpm run db:migrate
+        env:
+          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
+      - run: pnpm run test
+        env:
+          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
+          REDIS_URL: redis://localhost:6379
+      - run: pnpm run test:isolation
+        env:
+          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
+          REDIS_URL: redis://localhost:6379

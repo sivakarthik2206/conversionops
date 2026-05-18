@@ -1,0 +1,13 @@
+﻿{
+  "name": "@conversionops/compliance",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@conversionops/db": "workspace:*",
+    "@conversionops/sdk-standards": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,12 @@
+﻿# Global owners
+* @conversionops/core-team
+
+# Schema — requires senior review
+packages/db/prisma/schema.prisma @conversionops/senior-engineers
+
+# Compliance — requires compliance review
+packages/compliance/ @conversionops/compliance-team
+
+# Auth + RBAC
+packages/auth/ @conversionops/senior-engineers
+apps/api/src/modules/auth/ @conversionops/senior-engineers

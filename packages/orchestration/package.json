@@ -1,0 +1,17 @@
+﻿{
+  "name": "@conversionops/orchestration",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "dependencies": {
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.0.0",
+    "xstate": "^5.0.0",
+    "@conversionops/db": "workspace:*",
+    "@conversionops/types": "workspace:*",
+    "@conversionops/sdk-standards": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
