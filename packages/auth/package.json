@@ -5,7 +5,9 @@
   "main": "./src/index.ts",
   "dependencies": {
     "jsonwebtoken": "^9.0.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "@conversionops/types": "workspace:*",
+    "@conversionops/sdk-standards": "workspace:*"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.0",

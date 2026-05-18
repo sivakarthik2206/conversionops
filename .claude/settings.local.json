@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"^helmet$|^compression$|^uuid$|^resend$\")",
+      "PowerShell(ls C:\\\\Users\\\\Karthik\\\\Desktop\\\\conversionops\\\\node_modules | Where-Object { $_.Name -match \"^\\(helmet|compression|uuid|resend\\)$\" } | Select-Object -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem C:\\\\Users\\\\Karthik\\\\Desktop\\\\conversionops\\\\node_modules -Directory | Where-Object { $_.Name -in @\\(\"helmet\",\"compression\",\"uuid\",\"resend\",\"@types\"\\) } | Select-Object -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Karthik\\\\Desktop\\\\conversionops\\\\node_modules\\\\.pnpm\" -Directory | Where-Object { $_.Name -match \"^\\(helmet|compression|uuid|resend\\)\" } | Select-Object -First 10 -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Karthik\\\\Desktop\\\\conversionops\\\\node_modules\\\\.pnpm\" -Directory | Where-Object { $_.Name -match \"^\\(helmet|compression\\)\" } | Select-Object -First 10 -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Karthik\\\\Desktop\\\\conversionops\\\\node_modules\\\\.pnpm\" -Directory | Where-Object { $_.Name -match \"^\\(helmet|compression|nestjs__throttler|@nestjs\\\\+throttler\\)\" } | Select-Object -ExpandProperty Name)",
+      "Bash(pnpm run *)",
+      "Bash(xargs -I{} sh -c 'ls \"{}\" | grep conversionops 2>/dev/null && echo \"in {}\" ')",
+      "Bash(pnpm install *)",
+      "Bash(python3 *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
