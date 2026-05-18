@@ -1,4 +1,4 @@
-xport type LeadEventType =
+export type LeadEventType =
   | "lead.created"
   | "lead.contacted"
   | "lead.qualification.started"

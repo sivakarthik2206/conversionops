@@ -1,1 +1,3 @@
-/ Footer — implement in Phase 7
+export default function Footer() {
+  return <footer>© 2025 ConversionOps</footer>;
+}

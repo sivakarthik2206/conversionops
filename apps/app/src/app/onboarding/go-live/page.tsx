@@ -1,1 +1,1 @@
-/ Onboarding step 6 — implement in Phase 7
+export default function Page() { return <div>go-live — implement in Phase 7</div>; }

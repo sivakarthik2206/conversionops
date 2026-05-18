@@ -1,1 +1,2 @@
-/ SendMessageCommand — implement in Phase 5
+// implement in build phases
+export {};

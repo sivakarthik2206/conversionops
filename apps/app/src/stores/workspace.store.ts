@@ -1,1 +1,2 @@
-/ Zustand workspace store — implement in Phase 7
+// implement in Phase 7
+export {};

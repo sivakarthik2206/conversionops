@@ -1,1 +1,1 @@
-/ Onboarding step 3 — implement in Phase 7
+export default function Page() { return <div>connect-crm — implement in Phase 7</div>; }

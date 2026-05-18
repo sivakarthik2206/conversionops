@@ -1,1 +1,2 @@
-/ Resend email client — implement in Phase 5
+// implement in Phase 5/9
+export {};

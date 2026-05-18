@@ -1,1 +1,3 @@
-/ Privacy policy — add Termly.io embed
+export default function PrivacyPage() {
+  return <div>Privacy Policy</div>;
+}

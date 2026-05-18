@@ -1,1 +1,2 @@
-/ XState lead state machine — implement in Phase 4
+// XState lead lifecycle machine — implement in Phase 4
+export {};

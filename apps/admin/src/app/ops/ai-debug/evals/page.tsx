@@ -1,1 +1,3 @@
-/ Eval results browser — implement in Phase 10
+export default function EvalsPage() {
+  return <div>Evals — implement in Phase 10</div>;
+}

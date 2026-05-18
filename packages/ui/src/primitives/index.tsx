@@ -1,1 +1,2 @@
-/ Primitive components — implement in Phase 7
+// Primitive components — implement in Phase 7
+export {};

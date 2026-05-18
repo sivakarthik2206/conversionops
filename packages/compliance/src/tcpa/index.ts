@@ -1,12 +1,9 @@
-/ TCPA invariants — called before every outbound SMS
-// These are hard-coded rules. Never bypass. Never feature-flag.
-
 export const TCPA_OPT_OUT_KEYWORDS = [
   "STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT",
 ] as const;
 
-export const QUIET_HOURS_START = 21; // 9pm
-export const QUIET_HOURS_END   =  8; // 8am
+export const QUIET_HOURS_START = 21;
+export const QUIET_HOURS_END = 8;
 
 export function isOptOutKeyword(message: string): boolean {
   const normalised = message.trim().toUpperCase();
@@ -22,7 +19,6 @@ export function isQuietHours(timezone: string): boolean {
     );
     return hour >= QUIET_HOURS_START || hour < QUIET_HOURS_END;
   } catch {
-    // Unknown timezone — default to safe (blocked)
     return true;
   }
 }

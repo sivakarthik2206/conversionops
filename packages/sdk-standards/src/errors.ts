@@ -1,4 +1,4 @@
-xport class ConversionOpsError extends Error {
+export class ConversionOpsError extends Error {
   constructor(
     public readonly code: string,
     message: string,

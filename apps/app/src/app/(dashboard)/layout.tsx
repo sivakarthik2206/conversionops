@@ -1,1 +1,3 @@
-/ Dashboard shell with sidebar — implement in Phase 7
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return <div>{children}</div>;
+}

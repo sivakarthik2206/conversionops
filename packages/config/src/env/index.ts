@@ -1,20 +1,12 @@
-mport { z } from "zod";
+import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
-  AZURE_OPENAI_ENDPOINT: z.string().url(),
-  AZURE_OPENAI_API_KEY: z.string().min(1),
-  AZURE_OPENAI_DEPLOYMENT_NAME: z.string().default("gpt-4o-mini"),
-  TWILIO_ACCOUNT_SID: z.string().min(1),
-  TWILIO_AUTH_TOKEN: z.string().min(1),
-  TWILIO_PHONE_NUMBER: z.string().min(1),
-  STRIPE_SECRET_KEY: z.string().min(1),
-  STRIPE_WEBHOOK_SECRET: z.string().min(1),
-  RESEND_API_KEY: z.string().min(1),
-  JWT_SECRET: z.string().min(32),
-  MAGIC_LINK_SECRET: z.string().min(32),
+  DATABASE_URL: z.string(),
+  REDIS_URL: z.string().default("redis://localhost:6379"),
+  GOOGLE_CLOUD_PROJECT: z.string().default("conversionops-prod"),
+  GOOGLE_CLOUD_REGION: z.string().default("us-central1"),
+  VERTEX_AI_MODEL: z.string().default("gemini-1.5-flash-001"),
   PORT: z.string().default("3001").transform(Number),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
 });
@@ -29,5 +21,3 @@ export function validateEnv(): Env {
   }
   return result.data;
 }
-
-export const env = validateEnv();

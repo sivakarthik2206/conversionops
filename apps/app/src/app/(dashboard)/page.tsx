@@ -1,1 +1,3 @@
-/ Dashboard home / overview — implement in Phase 7
+export default function DashboardPage() {
+  return <div>Dashboard — implement in Phase 7</div>;
+}

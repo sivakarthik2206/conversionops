@@ -1,4 +1,4 @@
-xport type FeatureFlagName =
+export type FeatureFlagName =
   | "ai_reactivation"
   | "advanced_routing"
   | "ai_evals_async"
@@ -9,11 +9,6 @@ xport type FeatureFlagName =
 
 export type FeatureFlagValue = boolean | string | number;
 
-export interface FeatureFlagDefaults {
-  [key: string]: FeatureFlagValue;
-}
-
-// Global defaults — overridden per workspace in DB (FeatureFlagOverride table)
 export const FEATURE_FLAG_DEFAULTS: Record<FeatureFlagName, FeatureFlagValue> = {
   ai_reactivation: false,
   advanced_routing: false,

@@ -1,1 +1,3 @@
-/ Navbar — implement in Phase 7
+export default function Navbar() {
+  return <nav>ConversionOps</nav>;
+}

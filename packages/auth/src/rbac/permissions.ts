@@ -1,4 +1,4 @@
-mport { UserRole } from "./roles";
+import { UserRole } from "./roles";
 
 export type Permission =
   | "lead:read" | "lead:write" | "lead:assign"

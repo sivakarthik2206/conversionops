@@ -1,1 +1,1 @@
-/ CRM integrations — implement in Phase 9
+export default function Page() { return <div>integrations — implement in Phase 7</div>; }

@@ -1,1 +1,1 @@
-/ Agent management — implement in Phase 3
+export default function Page() { return <div>agents — implement in Phase 7</div>; }

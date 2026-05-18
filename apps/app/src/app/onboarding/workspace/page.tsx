@@ -1,1 +1,1 @@
-/ Onboarding step 1 — implement in Phase 7
+export default function Page() { return <div>workspace — implement in Phase 7</div>; }

@@ -1,1 +1,3 @@
-/ bull-board queue inspector — implement in Phase 10
+export default function QueuesPage() {
+  return <div>Queues — implement in Phase 10</div>;
+}

@@ -1,1 +1,3 @@
-/ Operational health dashboard — implement in Phase 10
+export default function HealthPage() {
+  return <div>Health — implement in Phase 10</div>;
+}

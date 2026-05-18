@@ -1,1 +1,2 @@
-/ Notification dispatch — implement in Phase 4
+// Notification service — implement in Phase 4
+export {};

@@ -1,2 +1,2 @@
-xport * from "./comms/twilio";
-export * from "./lead-sources";
+// Integration clients — implement in Phase 5 and Phase 9
+export {};

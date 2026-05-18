@@ -1,1 +1,1 @@
-/ Lead pipeline — implement in Phase 7
+export default function Page() { return <div>leads — implement in Phase 7</div>; }

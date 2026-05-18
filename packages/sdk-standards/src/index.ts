@@ -1,2 +1,2 @@
-xport * from "./errors";
+export * from "./errors";
 export * from "./async";

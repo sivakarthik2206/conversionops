@@ -1,4 +1,4 @@
-xport async function withRetry<T>(
+export async function withRetry<T>(
   fn: () => Promise<T>,
   options: {
     attempts?: number;
@@ -19,4 +19,5 @@ xport async function withRetry<T>(
   throw new Error("unreachable");
 }
 
-export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms: number): Promise<void> =>
+  new Promise((r) => setTimeout(r, ms));

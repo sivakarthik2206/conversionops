@@ -1,1 +1,3 @@
-/ DLQ + one-click reprocess — implement in Phase 10
+export default function DeadLettersPage() {
+  return <div>Dead Letters — implement in Phase 10</div>;
+}

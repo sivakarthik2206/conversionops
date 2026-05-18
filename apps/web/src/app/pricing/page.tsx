@@ -1,1 +1,3 @@
-/ Pricing page — implement in Phase 7
+export default function PricingPage() {
+  return <div>Pricing — implement in Phase 7</div>;
+}

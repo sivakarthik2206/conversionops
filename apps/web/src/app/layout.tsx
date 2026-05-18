@@ -1,18 +1,8 @@
-mport type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "ConversionOps — AI Lead Conversion Infrastructure",
-  description: "Every lead answered. Every appointment booked. Zero effort from you.",
-  metadataBase: new URL("https://conversionops.in"),
-  openGraph: {
-    title: "ConversionOps",
-    description: "AI lead conversion infrastructure for real estate agents and brokerages.",
-    url: "https://conversionops.in",
-    siteName: "ConversionOps",
-    locale: "en_US",
-    type: "website",
-  },
+  title: "ConversionOps",
+  description: "AI Lead Conversion Infrastructure",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

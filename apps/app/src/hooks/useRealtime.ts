@@ -1,1 +1,2 @@
-/ Socket.IO realtime hook — implement in Phase 6
+// implement in Phase 6
+export {};

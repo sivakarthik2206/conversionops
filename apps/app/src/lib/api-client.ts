@@ -1,1 +1,2 @@
-/ Type-safe API client — implement in Phase 7
+// implement in Phase 7
+export {};

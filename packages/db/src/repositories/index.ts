@@ -1,4 +1,4 @@
-xport * from "./workspace.repository";
+export * from "./workspace.repository";
 export * from "./lead.repository";
 export * from "./conversation.repository";
 export * from "./message.repository";

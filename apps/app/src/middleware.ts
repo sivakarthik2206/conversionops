@@ -1,1 +1,2 @@
-/ Next.js auth middleware — implement in Phase 2
+// Auth middleware — implement in Phase 2
+export {};

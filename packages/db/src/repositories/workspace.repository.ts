@@ -1,1 +1,2 @@
-/ WorkspaceRepository — implement in Phase 2
+// WorkspaceRepository — implement in Phase 2
+export {};

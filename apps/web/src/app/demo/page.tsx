@@ -1,1 +1,3 @@
-/ Interactive demo page — implement in Phase 7
+export default function DemoPage() {
+  return <div>Demo — implement in Phase 7</div>;
+}

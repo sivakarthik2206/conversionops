@@ -1,1 +1,1 @@
-/ Routing rules — implement in Phase 4
+export default function Page() { return <div>routing — implement in Phase 7</div>; }

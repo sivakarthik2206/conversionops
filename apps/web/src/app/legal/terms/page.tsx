@@ -1,1 +1,3 @@
-/ Terms of service — add Termly.io embed
+export default function TermsPage() {
+  return <div>Terms of Service</div>;
+}

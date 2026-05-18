@@ -1,3 +1,2 @@
-xport { PrismaClient } from "@prisma/client";
-export * from "./client";
-export * from "./repositories";
+export { prisma } from "./client";
+export type { PrismaClient } from "./client";

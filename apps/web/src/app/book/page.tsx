@@ -1,1 +1,3 @@
-/ Cal.com booking embed — implement in Phase 7
+export default function BookPage() {
+  return <div>Book — implement in Phase 7</div>;
+}

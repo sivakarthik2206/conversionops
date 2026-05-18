@@ -1,1 +1,2 @@
-/ Append-only event store — implement in Phase 4
+// Event store — implement in Phase 4
+export {};

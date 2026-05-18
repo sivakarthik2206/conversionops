@@ -1,4 +1,4 @@
-xport interface AIMessageMetadata {
+export interface AIMessageMetadata {
   promptVersion: string;
   promptHash: string;
   modelVersion: string;
