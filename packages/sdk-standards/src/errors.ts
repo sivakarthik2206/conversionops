@@ -38,3 +38,33 @@ export class IdempotencyConflictError extends ConversionOpsError {
     super("IDEMPOTENCY_CONFLICT", "Request already processing", { key });
   }
 }
+
+export class LeadNotFoundError extends ConversionOpsError {
+  constructor(leadId: string) {
+    super("LEAD_NOT_FOUND", `Lead ${leadId} not found`, { leadId });
+  }
+}
+
+export class UnauthorizedError extends ConversionOpsError {
+  constructor(message = "Unauthorized") {
+    super("UNAUTHORIZED", message);
+  }
+}
+
+export class ForbiddenError extends ConversionOpsError {
+  constructor(message = "Forbidden") {
+    super("FORBIDDEN", message);
+  }
+}
+
+export class ValidationError extends ConversionOpsError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("VALIDATION_ERROR", message, context);
+  }
+}
+
+export class ExternalServiceError extends ConversionOpsError {
+  constructor(service: string, message: string) {
+    super("EXTERNAL_SERVICE_ERROR", `${service}: ${message}`, { service });
+  }
+}

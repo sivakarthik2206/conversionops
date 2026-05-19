@@ -1,2 +1,2 @@
-export * from "./tcpa";
-export * from "./fair-housing";
+export * from './tcpa';
+export * from './fair-housing';

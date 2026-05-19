@@ -129,6 +129,9 @@ importers:
       socket.io:
         specifier: ^4.7.0
         version: 4.8.3
+      twilio:
+        specifier: ^5.0.0
+        version: 5.13.1
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
@@ -322,6 +325,9 @@ importers:
       '@conversionops/db':
         specifier: workspace:*
         version: link:../db
+      '@conversionops/sdk-standards':
+        specifier: workspace:*
+        version: link:../sdk-standards
       '@conversionops/types':
         specifier: workspace:*
         version: link:../types
@@ -332,6 +338,9 @@ importers:
         specifier: ^5.0.0
         version: 5.31.1
     devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
@@ -370,6 +379,9 @@ importers:
         specifier: workspace:*
         version: link:../sdk-standards
     devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
@@ -408,9 +420,15 @@ importers:
       '@conversionops/compliance':
         specifier: workspace:*
         version: link:../compliance
+      '@conversionops/db':
+        specifier: workspace:*
+        version: link:../db
       '@conversionops/sdk-standards':
         specifier: workspace:*
         version: link:../sdk-standards
+      '@conversionops/types':
+        specifier: workspace:*
+        version: link:../types
       resend:
         specifier: ^3.0.0
         version: 3.5.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -418,6 +436,9 @@ importers:
         specifier: ^5.0.0
         version: 5.13.1
     devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
       typescript:
         specifier: ^5.4.0
         version: 5.9.3

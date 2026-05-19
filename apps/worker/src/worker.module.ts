@@ -7,6 +7,9 @@ import { LeadIntakeProcessor } from './processors/lead-intake.processor';
 import { LeadRoutingProcessor } from './processors/lead-routing.processor';
 import { AuditLogProcessor } from './processors/audit-log.processor';
 import { NotificationProcessor } from './processors/notification.processor';
+import { AiResponseProcessor } from './processors/ai-response.processor';
+import { QualificationProcessor } from './processors/qualification.processor';
+import { MissedCallProcessor } from './processors/missed-call.processor';
 
 @Module({
   imports: [
@@ -18,6 +21,9 @@ import { NotificationProcessor } from './processors/notification.processor';
     LeadRoutingProcessor,
     AuditLogProcessor,
     NotificationProcessor,
+    AiResponseProcessor,
+    QualificationProcessor,
+    MissedCallProcessor,
   ],
 })
 export class WorkerModule implements OnModuleInit, OnModuleDestroy {
@@ -28,6 +34,9 @@ export class WorkerModule implements OnModuleInit, OnModuleDestroy {
     private readonly leadRoutingProcessor: LeadRoutingProcessor,
     private readonly auditLogProcessor: AuditLogProcessor,
     private readonly notificationProcessor: NotificationProcessor,
+    private readonly aiResponseProcessor: AiResponseProcessor,
+    private readonly qualificationProcessor: QualificationProcessor,
+    private readonly missedCallProcessor: MissedCallProcessor,
   ) {}
 
   onModuleInit(): void {
@@ -51,6 +60,21 @@ export class WorkerModule implements OnModuleInit, OnModuleDestroy {
         QUEUE_NAMES.NOTIFICATION,
         (job) => this.notificationProcessor.process(job),
         { connection: redisConnection, concurrency: 10 },
+      ),
+      new Worker(
+        QUEUE_NAMES.AI_RESPONSE,
+        (job) => this.aiResponseProcessor.process(job),
+        { connection: redisConnection, concurrency: 5 },
+      ),
+      new Worker(
+        QUEUE_NAMES.QUALIFICATION,
+        (job) => this.qualificationProcessor.process(job),
+        { connection: redisConnection, concurrency: 10 },
+      ),
+      new Worker(
+        QUEUE_NAMES.MISSED_CALL,
+        (job) => this.missedCallProcessor.process(job),
+        { connection: redisConnection, concurrency: 5 },
       ),
     );
   }

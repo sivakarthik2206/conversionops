@@ -8,6 +8,10 @@ import { LeadModule } from './modules/lead/lead.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { RoutingModule } from './modules/routing/routing.module';
+import { TwilioSmsWebhookController } from './webhooks/twilio/sms.webhook';
+import { TwilioVoiceWebhookController } from './webhooks/twilio/voice.webhook';
+import { ZillowWebhookController } from './webhooks/zillow/zillow.webhook';
+import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.webhook';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RbacGuard } from './common/guards/rbac.guard';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -25,6 +29,12 @@ import { PrismaService } from './modules/prisma/prisma.service';
     ConversationModule,
     AgentModule,
     RoutingModule,
+  ],
+  controllers: [
+    TwilioSmsWebhookController,
+    TwilioVoiceWebhookController,
+    ZillowWebhookController,
+    GenericLeadWebhookController,
   ],
   providers: [
     {
@@ -48,7 +58,10 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(TenantMiddleware, AuditLogMiddleware)
-      .exclude({ path: 'v1/auth/(.*)', method: RequestMethod.ALL })
+      .exclude(
+        { path: 'v1/auth/(.*)', method: RequestMethod.ALL },
+        { path: 'v1/webhooks/(.*)', method: RequestMethod.ALL },
+      )
       .forRoutes('*');
   }
 }

@@ -3,11 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
   "dependencies": {
     "@conversionops/db": "workspace:*",
     "@conversionops/sdk-standards": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "typescript": "^5.4.0"
   }
 }

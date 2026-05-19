@@ -1,12 +1,21 @@
 export interface LeadIntakeJobData {
-  leadId: string;
+  leadId?: string;
   workspaceId: string;
+  from?: string;
+  to?: string;
+  body?: string;
+  messageSid?: string;
+  source?: string;
+  externalId?: string;
+  name?: string;
+  email?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AiResponseJobData {
   leadId: string;
   workspaceId: string;
-  conversationId?: string;
+  conversationId: string;
 }
 
 export interface QualificationJobData {

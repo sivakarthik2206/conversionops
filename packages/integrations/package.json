@@ -3,13 +3,19 @@
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
   "dependencies": {
     "twilio": "^5.0.0",
     "resend": "^3.0.0",
     "@conversionops/compliance": "workspace:*",
-    "@conversionops/sdk-standards": "workspace:*"
+    "@conversionops/db": "workspace:*",
+    "@conversionops/sdk-standards": "workspace:*",
+    "@conversionops/types": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "typescript": "^5.4.0"
   }
 }
