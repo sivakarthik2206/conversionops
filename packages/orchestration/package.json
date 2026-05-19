@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
   "dependencies": {
     "bullmq": "^5.0.0",
     "ioredis": "^5.0.0",

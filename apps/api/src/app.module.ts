@@ -7,6 +7,7 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
 import { LeadModule } from './modules/lead/lead.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { RoutingModule } from './modules/routing/routing.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RbacGuard } from './common/guards/rbac.guard';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -23,6 +24,7 @@ import { PrismaService } from './modules/prisma/prisma.service';
     LeadModule,
     ConversationModule,
     AgentModule,
+    RoutingModule,
   ],
   providers: [
     {

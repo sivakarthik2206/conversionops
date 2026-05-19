@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import { redisConnection } from "./connection";
+export { redisConnection } from "./connection";
 
 export const QUEUE_NAMES = {
   LEAD_INTAKE: "lead-intake",
