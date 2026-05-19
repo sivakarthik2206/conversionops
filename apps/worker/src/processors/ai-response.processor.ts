@@ -27,6 +27,7 @@ import {
 } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
 import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
+import { runEvals } from '@conversionops/ai';
 
 const PROMPT_VERSION = 'qualification-v1.0.0';
 const CHAIN_VERSION = 'qualification-chain-v1.0.0';
@@ -313,6 +314,13 @@ export class AiResponseProcessor {
         });
       }
     }
+
+    // Step 7j: Fire-and-forget AI evals — never awaited, never throws
+    void runEvals(
+      { messageId: message.id, workspaceId, leadId, conversationId },
+      this.prisma,
+      this.vertexClient,
+    );
 
     const totalMs = Date.now() - startMs;
     logger.info({ leadId, workspaceId, messageId: message.id, totalMs }, 'ai-response: completed');

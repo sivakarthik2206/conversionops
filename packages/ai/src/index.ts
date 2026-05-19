@@ -16,3 +16,16 @@ export { checkQuota, trackUsage, alertIfApproaching } from './governance/token-b
 export type { QuotaCheckResult, AlertResult } from './governance/token-budget';
 
 export { ConversationMemoryManager } from './memory/conversation-memory';
+
+export { guardAgainstHallucination } from './guardrails/hallucination-guard';
+export type { GuardResult, GuardAction } from './guardrails/hallucination-guard';
+
+export { runEvals } from './evals/runners/eval-runner';
+export type { EvalJobData } from './evals/runners/eval-runner';
+
+export { runRegressionTests } from './evals/runners/regression-runner';
+export type { RegressionReport } from './evals/runners/regression-runner';
+
+export { scoreQualificationProgress, getNextUnansweredField } from './evals/scorers/qualification.scorer';
+export { scoreBookingIntent } from './evals/scorers/booking-intent.scorer';
+export type { ConversationMessageForScoring } from './evals/scorers/booking-intent.scorer';

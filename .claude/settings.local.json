@@ -24,7 +24,9 @@
       "Bash(mkdir -p \"C:/Users/Karthik/.claude/plans/\")",
       "Bash(pnpm --filter @conversionops/app add framer-motion lucide-react clsx tailwind-merge)",
       "Bash(pnpm --filter @conversionops/web add lucide-react clsx)",
-      "Bash(pnpm --filter @conversionops/ui add framer-motion)"
+      "Bash(pnpm --filter @conversionops/ui add framer-motion)",
+      "Bash(grep -v \"//\")",
+      "Bash(pnpm --filter @conversionops/ai add @conversionops/observability)"
     ]
   }
 }

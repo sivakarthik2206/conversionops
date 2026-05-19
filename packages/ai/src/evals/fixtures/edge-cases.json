@@ -1,0 +1,122 @@
+﻿[
+  {
+    "id": "empty_message",
+    "description": "Completely empty message body",
+    "input": "",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "emoji_only",
+    "description": "Message contains only emojis",
+    "input": "👋🏠🔑💰",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "phone_number_in_body",
+    "description": "Lead includes phone number in message text",
+    "input": "Call me at 305-555-0142 for more info",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "all_caps_aggression",
+    "description": "All-caps aggressive message",
+    "input": "STOP TEXTING ME RIGHT NOW THIS IS HARASSMENT",
+    "expectedBehavior": "optout"
+  },
+  {
+    "id": "gibberish_spam",
+    "description": "Random gibberish characters",
+    "input": "asdjk2389f nqwejrq 2309rj qpwoier",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "sql_injection",
+    "description": "SQL injection attempt in message",
+    "input": "'; DROP TABLE leads; -- looking to buy",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "very_long_message",
+    "description": "Message exceeding 2000 characters",
+    "input": "I am very interested in buying a property in Miami. I have been looking for about 6 months now. My budget is flexible between $400,000 and $600,000. I am pre-approved through Wells Fargo for $550,000. My timeline is approximately 60-90 days. I prefer single-family homes in the Brickell or Coconut Grove areas. I have 3 kids so I need good school proximity although I know you cannot mention school ratings. My wife prefers at least 3 bedrooms and 2 bathrooms. We have a dog so a yard is important. I work from home so a dedicated office space or a home with an extra bedroom would be ideal. We are currently renting and our lease ends in 3 months which makes the timing perfect. I have looked at properties on Zillow and Realtor but would love to have someone local who knows the market guide us. My contact information is in the system. I am available for showings on weekends and weekday evenings after 6pm. I am also open to condos if they allow large pets. The most important thing for us is the neighborhood feel and walkability. We love the Coconut Grove area especially near the village. Would love to see anything that comes up there. Also interested in Coral Gables if the price is right. Budget absolutely firm at $600k maximum.",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "multiple_opt_out_keywords",
+    "description": "Message containing multiple opt-out keywords",
+    "input": "STOP UNSUBSCRIBE QUIT please stop all messages",
+    "expectedBehavior": "optout"
+  },
+  {
+    "id": "budget_in_euros",
+    "description": "Lead mentions budget in euros",
+    "input": "My budget is around 400,000 euros",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "budget_as_range",
+    "description": "Budget expressed as a range",
+    "input": "Budget somewhere between 500 to 700 thousand dollars",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "sarcasm_positive",
+    "description": "Sarcastic positive statement",
+    "input": "Oh yes I definitely want to buy a house from some random AI bot, sounds super legit",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "copied_listing_description",
+    "description": "Lead copies and pastes a listing description",
+    "input": "3BR/2BA 1,450 sqft. Updated kitchen, stainless appliances. Hardwood floors throughout. Central AC. Community pool. Walk score 92. Listed at $425,000. MLS#12345678",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "markdown_in_message",
+    "description": "Message contains markdown/HTML",
+    "input": "<script>alert('xss')</script> **Bold text** [link](http://evil.com) Looking to buy",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "developer_test_message",
+    "description": "Developer test message from staging",
+    "input": "test test 123 this is a test message do not process",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "asks_if_ai",
+    "description": "Lead directly asks if this is an AI",
+    "input": "Wait are you a robot? Is this an AI bot?",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "legal_threat_sue",
+    "description": "Legal threat with sue keyword",
+    "input": "I will sue you and your company if you text me again",
+    "expectedBehavior": "escalate"
+  },
+  {
+    "id": "discrimination_claim",
+    "description": "Discrimination accusation",
+    "input": "This is discrimination, I am going to report you",
+    "expectedBehavior": "escalate"
+  },
+  {
+    "id": "profanity_aggressive",
+    "description": "Profanity-laden aggressive message (opt-out adjacent)",
+    "input": "Stop texting me I said STOP this is harassment END",
+    "expectedBehavior": "optout"
+  },
+  {
+    "id": "unicode_normalization",
+    "description": "Opt-out keyword with unicode lookalike chars",
+    "input": "ｓｔｏｐ please stop texting",
+    "expectedBehavior": "safe"
+  },
+  {
+    "id": "complaint_supervisor",
+    "description": "Asking for manager or supervisor",
+    "input": "I want to speak to a manager or supervisor immediately",
+    "expectedBehavior": "escalate"
+  }
+]

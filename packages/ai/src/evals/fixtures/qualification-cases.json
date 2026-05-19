@@ -1,1 +1,330 @@
+﻿[
+  {
+    "id": "happy_path_buyer",
+    "description": "Pre-approved buyer, high budget, fast timeline in Miami",
+    "messages": [
+      {"role":"HUMAN","content":"Hi, looking to buy in Brickell"},
+      {"role":"AI","content":"Hi! I'm Alex. Are you looking to buy soon?"},
+      {"role":"HUMAN","content":"Yes, pre-approved, $800k budget, want to move in 30 days, single family"}
+    ],
+    "expectedExtraction": {"budget":"$800k","timeline":"30_days","financing":"pre_approved","area":"Brickell","propertyType":"single-family"},
+    "expectedScore": 88,
+    "expectedTier": "PRIORITY"
+  },
+  {
+    "id": "warm_buyer",
+    "description": "Needs financing, moderate budget, 90-day timeline",
+    "messages": [
+      {"role":"HUMAN","content":"I want to buy a condo around $400k"},
+      {"role":"AI","content":"Great! Have you been pre-approved?"},
+      {"role":"HUMAN","content":"Not yet, need to get financing sorted, maybe in 90 days"}
+    ],
+    "expectedExtraction": {"budget":"$400k","timeline":"90_days","financing":"needs_financing","propertyType":"condo"},
+    "expectedScore": 52,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "cold_browser",
+    "description": "No timeline, no financing, just browsing",
+    "messages": [
+      {"role":"HUMAN","content":"Just looking around, not in a hurry"},
+      {"role":"AI","content":"No problem! What areas are you interested in?"},
+      {"role":"HUMAN","content":"Not sure yet, just browsing"}
+    ],
+    "expectedExtraction": {"urgency":"browsing"},
+    "expectedScore": 8,
+    "expectedTier": "COLD"
+  },
+  {
+    "id": "seller_intent",
+    "description": "Seller who wants to list, not buy",
+    "messages": [
+      {"role":"HUMAN","content":"I want to sell my house in Coral Gables"},
+      {"role":"AI","content":"Happy to help! What's your timeline for listing?"},
+      {"role":"HUMAN","content":"Asap, want to list this month"}
+    ],
+    "expectedExtraction": {"intent":"sell","area":"Coral Gables","urgency":"immediate"},
+    "expectedScore": 40,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "investor_multi",
+    "description": "Cash investor, immediate, high urgency",
+    "messages": [
+      {"role":"HUMAN","content":"Cash buyer, building a portfolio, need something in Miami immediately"},
+      {"role":"AI","content":"Great! What property type and budget?"},
+      {"role":"HUMAN","content":"Multi-family, budget flexible up to $2M, need to close this month"}
+    ],
+    "expectedExtraction": {"financing":"cash","urgency":"immediate","intent":"buy","area":"Miami"},
+    "expectedScore": 95,
+    "expectedTier": "PRIORITY"
+  },
+  {
+    "id": "opt_out_mid",
+    "description": "Lead starts conversation then opts out",
+    "messages": [
+      {"role":"HUMAN","content":"Hi interested in buying"},
+      {"role":"AI","content":"Hi! What area are you looking in?"},
+      {"role":"HUMAN","content":"STOP"}
+    ],
+    "expectedExtraction": {},
+    "expectedScore": 0,
+    "expectedTier": "COLD",
+    "expectedBehavior": "optout"
+  },
+  {
+    "id": "legal_threat",
+    "description": "Lead makes legal threat",
+    "messages": [
+      {"role":"HUMAN","content":"Stop texting me or I will sue you for TCPA violations"},
+      {"role":"AI","content":"I understand your concern. I will have a team member contact you."}
+    ],
+    "expectedExtraction": {},
+    "expectedScore": 0,
+    "expectedTier": "COLD",
+    "expectedBehavior": "escalate"
+  },
+  {
+    "id": "fair_housing_trigger",
+    "description": "Lead asks about school district (FHA trigger)",
+    "messages": [
+      {"role":"HUMAN","content":"Looking for something in a good school district area near top-rated schools"}
+    ],
+    "expectedExtraction": {},
+    "expectedScore": 0,
+    "expectedTier": "COLD",
+    "expectedBehavior": "flag"
+  },
+  {
+    "id": "booking_intent_early",
+    "description": "First message shows strong booking intent",
+    "messages": [
+      {"role":"HUMAN","content":"I want to schedule a showing tomorrow, are you available?"}
+    ],
+    "expectedExtraction": {},
+    "expectedScore": 15,
+    "expectedTier": "COLD",
+    "shouldBook": true
+  },
+  {
+    "id": "language_switch",
+    "description": "Starts in English, switches to Spanish",
+    "messages": [
+      {"role":"HUMAN","content":"Hi looking to buy"},
+      {"role":"AI","content":"Hi! What area are you looking in?"},
+      {"role":"HUMAN","content":"Hola, prefiero hablar en español. Busco en Miami, presupuesto $500k"}
+    ],
+    "expectedExtraction": {"area":"Miami","budget":"$500k"},
+    "expectedScore": 25,
+    "expectedTier": "COLD"
+  },
+  {
+    "id": "dormant_reactivation",
+    "description": "Cold lead returns after 45 days",
+    "messages": [
+      {"role":"HUMAN","content":"Hey I know it has been a while, I am ready to start looking again"},
+      {"role":"AI","content":"Welcome back! What has changed with your search?"},
+      {"role":"HUMAN","content":"Got my financing sorted, pre-approved now, looking in Brickell"}
+    ],
+    "expectedExtraction": {"financing":"pre_approved","area":"Brickell"},
+    "expectedScore": 45,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "budget_unusual_format",
+    "description": "Budget expressed as a million and a half",
+    "messages": [
+      {"role":"HUMAN","content":"My budget is around a mill and a half, cash buyer"}
+    ],
+    "expectedExtraction": {"budget":"$1.5M","financing":"cash"},
+    "expectedScore": 50,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "already_has_agent",
+    "description": "Lead already working with another agent",
+    "messages": [
+      {"role":"HUMAN","content":"I already have an agent but just wanted to compare options"}
+    ],
+    "expectedExtraction": {},
+    "expectedScore": 5,
+    "expectedTier": "COLD"
+  },
+  {
+    "id": "cash_buyer_luxury",
+    "description": "Cash buyer, luxury price point, immediate",
+    "messages": [
+      {"role":"HUMAN","content":"Cash buyer, looking for waterfront $3M+, want to see something this week"}
+    ],
+    "expectedExtraction": {"financing":"cash","urgency":"immediate","intent":"buy"},
+    "expectedScore": 100,
+    "expectedTier": "PRIORITY"
+  },
+  {
+    "id": "no_response_loop",
+    "description": "Three consecutive AI messages, no reply",
+    "messages": [
+      {"role":"AI","content":"Hi! What area are you looking in?"},
+      {"role":"AI","content":"Just following up — are you still interested?"},
+      {"role":"AI","content":"Last check-in — let me know if you want to chat!"}
+    ],
+    "expectedExtraction": {},
+    "expectedScore": 0,
+    "expectedTier": "COLD",
+    "expectedBehavior": "unresponsive"
+  },
+  {
+    "id": "renter_vs_buyer",
+    "description": "Lead confused about buying vs renting",
+    "messages": [
+      {"role":"HUMAN","content":"I am looking to rent or maybe buy, not sure yet"},
+      {"role":"AI","content":"Happy to help either way! What is your budget range?"},
+      {"role":"HUMAN","content":"Around $3000/month to rent or $350k to buy"}
+    ],
+    "expectedExtraction": {"budget":"$350k","intent":"buy"},
+    "expectedScore": 25,
+    "expectedTier": "COLD"
+  },
+  {
+    "id": "commercial_property",
+    "description": "Lead seeking commercial space",
+    "messages": [
+      {"role":"HUMAN","content":"Looking for commercial office space in downtown Miami, 2000 sqft"}
+    ],
+    "expectedExtraction": {"propertyType":"commercial","area":"Miami","intent":"buy"},
+    "expectedScore": 15,
+    "expectedTier": "COLD"
+  },
+  {
+    "id": "land_purchase",
+    "description": "Lead wants to buy land",
+    "messages": [
+      {"role":"HUMAN","content":"Looking to buy land to build a house on, budget $200k, near Naples FL"}
+    ],
+    "expectedExtraction": {"propertyType":"land","budget":"$200k","area":"Naples"},
+    "expectedScore": 20,
+    "expectedTier": "COLD"
+  },
+  {
+    "id": "new_construction",
+    "description": "Lead interested in new construction",
+    "messages": [
+      {"role":"HUMAN","content":"Interested in new construction homes, pre-approved $600k, timeline 6 months"}
+    ],
+    "expectedExtraction": {"financing":"pre_approved","budget":"$600k","timeline":"6_months"},
+    "expectedScore": 60,
+    "expectedTier": "HOT"
+  },
+  {
+    "id": "short_sale_inquiry",
+    "description": "Lead asking about short sales",
+    "messages": [
+      {"role":"HUMAN","content":"Looking for short sale properties, cash buyer, flexible on location"}
+    ],
+    "expectedExtraction": {"financing":"cash","intent":"buy"},
+    "expectedScore": 40,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "va_loan_buyer",
+    "description": "VA loan buyer, pre-approved",
+    "messages": [
+      {"role":"HUMAN","content":"VA loan pre-approved, $500k, ready to move in 60 days, veteran buyer"}
+    ],
+    "expectedExtraction": {"financing":"pre_approved","budget":"$500k","timeline":"90_days","urgency":"near_term"},
+    "expectedScore": 75,
+    "expectedTier": "HOT"
+  },
+  {
+    "id": "first_time_homebuyer",
+    "description": "First time buyer, needs guidance",
+    "messages": [
+      {"role":"HUMAN","content":"First time buyer, learning the process, budget around $300k"},
+      {"role":"AI","content":"Welcome! Have you started the pre-approval process?"},
+      {"role":"HUMAN","content":"Not yet, just starting to look, maybe 6 months out"}
+    ],
+    "expectedExtraction": {"budget":"$300k","timeline":"6_months","financing":"needs_financing"},
+    "expectedScore": 35,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "relocation_buyer",
+    "description": "Relocating from another state",
+    "messages": [
+      {"role":"HUMAN","content":"Moving from Chicago, need to buy by end of year, pre-approved $700k, want Brickell or Wynwood"}
+    ],
+    "expectedExtraction": {"financing":"pre_approved","budget":"$700k","area":"Brickell","urgency":"near_term"},
+    "expectedScore": 80,
+    "expectedTier": "PRIORITY"
+  },
+  {
+    "id": "vacation_property",
+    "description": "Buyer wants vacation/investment property",
+    "messages": [
+      {"role":"HUMAN","content":"Looking for a vacation home in Miami Beach, cash, $1.2M budget"}
+    ],
+    "expectedExtraction": {"financing":"cash","budget":"$1.2M","area":"Miami Beach","intent":"buy"},
+    "expectedScore": 65,
+    "expectedTier": "HOT"
+  },
+  {
+    "id": "investment_flip",
+    "description": "Investor looking to flip",
+    "messages": [
+      {"role":"HUMAN","content":"Looking to flip properties, cash buyer, $250k-400k range, need to close fast"}
+    ],
+    "expectedExtraction": {"financing":"cash","budget":"$400k","urgency":"immediate","intent":"buy"},
+    "expectedScore": 80,
+    "expectedTier": "PRIORITY"
+  },
+  {
+    "id": "inherited_property",
+    "description": "Inherited property, need to sell",
+    "messages": [
+      {"role":"HUMAN","content":"I inherited a property and need to sell it quickly, it is in Hialeah"}
+    ],
+    "expectedExtraction": {"intent":"sell","area":"Hialeah","urgency":"immediate"},
+    "expectedScore": 30,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "divorce_situation",
+    "description": "Selling due to divorce, motivated",
+    "messages": [
+      {"role":"HUMAN","content":"Going through a divorce and need to sell the house ASAP in Coral Gables"}
+    ],
+    "expectedExtraction": {"intent":"sell","area":"Coral Gables","urgency":"immediate"},
+    "expectedScore": 35,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "downsizing_senior",
+    "description": "Senior downsizing, cash, flexible timeline",
+    "messages": [
+      {"role":"HUMAN","content":"Retired, looking to downsize, cash buyer, no rush, want a condo in Boca Raton"}
+    ],
+    "expectedExtraction": {"financing":"cash","propertyType":"condo","area":"Boca Raton","urgency":"browsing"},
+    "expectedScore": 35,
+    "expectedTier": "WARM"
+  },
+  {
+    "id": "upsizing_family",
+    "description": "Growing family needs larger home urgently",
+    "messages": [
+      {"role":"HUMAN","content":"New baby coming, need more space ASAP, pre-approved $550k, 3+ bedrooms in Kendall"}
+    ],
+    "expectedExtraction": {"financing":"pre_approved","budget":"$550k","area":"Kendall","urgency":"immediate","intent":"buy"},
+    "expectedScore": 85,
+    "expectedTier": "PRIORITY"
+  },
+  {
+    "id": "foreclosure_inquiry",
+    "description": "Lead asking about foreclosure properties",
+    "messages": [
+      {"role":"HUMAN","content":"Looking at foreclosure properties, cash buyer, flexible budget up to $500k"}
+    ],
+    "expectedExtraction": {"financing":"cash","budget":"$500k","intent":"buy"},
+    "expectedScore": 50,
+    "expectedTier": "WARM"
+  }
 ]

@@ -9,6 +9,7 @@
   "dependencies": {
     "@google-cloud/vertexai": "^1.0.0",
     "@conversionops/compliance": "workspace:*",
+    "@conversionops/observability": "workspace:*",
     "@conversionops/db": "workspace:*",
     "@conversionops/sdk-standards": "workspace:*",
     "@conversionops/types": "workspace:*",

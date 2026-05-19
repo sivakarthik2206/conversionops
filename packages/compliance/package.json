@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@conversionops/db": "workspace:*",
+    "@conversionops/observability": "workspace:*",
     "@conversionops/sdk-standards": "workspace:*"
   },
   "devDependencies": {

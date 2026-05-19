@@ -352,6 +352,9 @@ importers:
       '@conversionops/db':
         specifier: workspace:*
         version: link:../db
+      '@conversionops/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@conversionops/sdk-standards':
         specifier: workspace:*
         version: link:../sdk-standards
@@ -402,6 +405,9 @@ importers:
       '@conversionops/db':
         specifier: workspace:*
         version: link:../db
+      '@conversionops/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@conversionops/sdk-standards':
         specifier: workspace:*
         version: link:../sdk-standards
