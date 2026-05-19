@@ -12,6 +12,9 @@ import { AiResponseProcessor } from './processors/ai-response.processor';
 import { QualificationProcessor } from './processors/qualification.processor';
 import { MissedCallProcessor } from './processors/missed-call.processor';
 import { RetentionProcessor } from './processors/retention.processor';
+import { CrmSyncProcessor } from './processors/crm-sync.processor';
+import { AppointmentBookingProcessor } from './processors/appointment-booking.processor';
+import { ReactivationProcessor } from './processors/reactivation.processor';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { RetentionProcessor } from './processors/retention.processor';
     QualificationProcessor,
     MissedCallProcessor,
     RetentionProcessor,
+    CrmSyncProcessor,
+    AppointmentBookingProcessor,
+    ReactivationProcessor,
   ],
 })
 export class WorkerModule implements OnModuleInit, OnModuleDestroy {
@@ -42,6 +48,9 @@ export class WorkerModule implements OnModuleInit, OnModuleDestroy {
     private readonly qualificationProcessor: QualificationProcessor,
     private readonly missedCallProcessor: MissedCallProcessor,
     private readonly retentionProcessor: RetentionProcessor,
+    private readonly crmSyncProcessor: CrmSyncProcessor,
+    private readonly appointmentBookingProcessor: AppointmentBookingProcessor,
+    private readonly reactivationProcessor: ReactivationProcessor,
   ) {}
 
   onModuleInit(): void {
@@ -54,6 +63,9 @@ export class WorkerModule implements OnModuleInit, OnModuleDestroy {
       new Worker(QUEUE_NAMES.QUALIFICATION, (job) => this.qualificationProcessor.process(job), { connection: redisConnection, concurrency: 10 }),
       new Worker(QUEUE_NAMES.MISSED_CALL, (job) => this.missedCallProcessor.process(job), { connection: redisConnection, concurrency: 5 }),
       new Worker(QUEUE_NAMES.RETENTION, (job) => this.retentionProcessor.process(job), { connection: redisConnection, concurrency: 1 }),
+      new Worker(QUEUE_NAMES.CRM_SYNC, (job) => this.crmSyncProcessor.process(job), { connection: redisConnection, concurrency: 3 }),
+      new Worker(QUEUE_NAMES.APPOINTMENT_BOOKING, (job) => this.appointmentBookingProcessor.process(job), { connection: redisConnection, concurrency: 5 }),
+      new Worker(QUEUE_NAMES.REACTIVATION, (job) => this.reactivationProcessor.process(job), { connection: redisConnection, concurrency: 3 }),
     );
 
     // Schedule daily retention job at 3am UTC

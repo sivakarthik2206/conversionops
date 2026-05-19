@@ -26,7 +26,12 @@
       "Bash(pnpm --filter @conversionops/web add lucide-react clsx)",
       "Bash(pnpm --filter @conversionops/ui add framer-motion)",
       "Bash(grep -v \"//\")",
-      "Bash(pnpm --filter @conversionops/ai add @conversionops/observability)"
+      "Bash(pnpm --filter @conversionops/ai add @conversionops/observability)",
+      "Bash(pnpm --filter @conversionops/integrations add axios)",
+      "Bash(pnpm --filter @conversionops/api add @nestjs/schedule)",
+      "Bash(pnpm --filter @conversionops/worker add @nestjs/schedule)",
+      "Bash(wait)",
+      "Bash(pnpm --filter @conversionops/integrations add zod)"
     ]
   }
 }

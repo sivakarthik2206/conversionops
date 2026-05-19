@@ -1,2 +1,14 @@
 export { TwilioClient } from './comms/twilio';
 export type { SendSMSOptions, ProvisionedNumber } from './comms/twilio';
+
+export { FollowUpBossClient } from './crm/follow-up-boss/client';
+export type { FUBContactInput, FUBContact } from './crm/follow-up-boss/client';
+export { syncLeadToFUB } from './crm/follow-up-boss/sync';
+
+export { ZapierWebhookRelay } from './crm/zapier/webhook-relay';
+export type { CRMEvent } from './crm/zapier/webhook-relay';
+
+export { CalComClient } from './booking/cal-com/client';
+export type { CalEventType, TimeSlot, CalBooking } from './booking/cal-com/client';
+export { parseCalComWebhook } from './booking/cal-com/webhooks';
+export type { CalComWebhookEvent, CalComEventType } from './booking/cal-com/webhooks';
