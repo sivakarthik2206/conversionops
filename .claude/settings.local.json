@@ -18,7 +18,13 @@
       "Bash(xxd nest-cli.json)",
       "Bash(pnpm --filter @conversionops/api add @socket.io/redis-adapter)",
       "Bash(pnpm --filter @conversionops/worker add @socket.io/redis-emitter)",
-      "Bash(pnpm --filter @conversionops/app add @tanstack/react-query)"
+      "Bash(pnpm --filter @conversionops/app add @tanstack/react-query)",
+      "Bash(xargs wc -l)",
+      "Read(//c/Users/Karthik/.claude/**)",
+      "Bash(mkdir -p \"C:/Users/Karthik/.claude/plans/\")",
+      "Bash(pnpm --filter @conversionops/app add framer-motion lucide-react clsx tailwind-merge)",
+      "Bash(pnpm --filter @conversionops/web add lucide-react clsx)",
+      "Bash(pnpm --filter @conversionops/ui add framer-motion)"
     ]
   }
 }
