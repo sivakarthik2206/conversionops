@@ -9,21 +9,22 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@conversionops/ai": "workspace:*",
+    "@conversionops/compliance": "workspace:*",
+    "@conversionops/db": "workspace:*",
+    "@conversionops/integrations": "workspace:*",
+    "@conversionops/observability": "workspace:*",
+    "@conversionops/orchestration": "workspace:*",
+    "@conversionops/sdk-standards": "workspace:*",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.0.0",
     "@nestjs/core": "^10.0.0",
+    "@socket.io/redis-emitter": "^5.1.0",
     "bullmq": "^5.0.0",
     "ioredis": "^5.0.0",
-    "xstate": "^5.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
-    "@conversionops/db": "workspace:*",
-    "@conversionops/ai": "workspace:*",
-    "@conversionops/compliance": "workspace:*",
-    "@conversionops/orchestration": "workspace:*",
-    "@conversionops/integrations": "workspace:*",
-    "@conversionops/observability": "workspace:*",
-    "@conversionops/sdk-standards": "workspace:*"
+    "xstate": "^5.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

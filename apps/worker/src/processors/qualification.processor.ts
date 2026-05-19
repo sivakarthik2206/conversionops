@@ -7,6 +7,7 @@ import { updateLeadScore, getTier, calculateScore } from '@conversionops/ai';
 import { LeadStatus, Prisma } from '@conversionops/db';
 import type { QualificationData } from '@conversionops/ai';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
 const FULLY_QUALIFIED_FIELDS = ['budget', 'timeline', 'financing', 'area', 'propertyType', 'urgency', 'intent'] as const;
 
@@ -14,7 +15,10 @@ const FULLY_QUALIFIED_FIELDS = ['budget', 'timeline', 'financing', 'area', 'prop
 export class QualificationProcessor {
   private readonly eventStore: EventStore;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {
     this.eventStore = new EventStore(prisma);
   }
 
@@ -81,6 +85,8 @@ export class QualificationProcessor {
 
       logger.info({ leadId, workspaceId, score, tier, answeredCount }, 'qualification: score updated');
     }
+
+    this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:scored', { leadId, score, tier });
 
     await queues.analyticsIngest
       .add('analytics-ingest', {

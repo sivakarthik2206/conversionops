@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Worker } from 'bullmq';
 import { QUEUE_NAMES, redisConnection } from '@conversionops/orchestration';
 import { PrismaModule } from './modules/prisma/prisma.module';
+import { RealtimeEmitterService } from './modules/realtime/realtime-emitter.service';
 import { LeadIntakeProcessor } from './processors/lead-intake.processor';
 import { LeadRoutingProcessor } from './processors/lead-routing.processor';
 import { AuditLogProcessor } from './processors/audit-log.processor';
@@ -17,6 +18,7 @@ import { MissedCallProcessor } from './processors/missed-call.processor';
     PrismaModule,
   ],
   providers: [
+    RealtimeEmitterService,
     LeadIntakeProcessor,
     LeadRoutingProcessor,
     AuditLogProcessor,

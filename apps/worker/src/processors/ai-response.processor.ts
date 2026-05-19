@@ -26,6 +26,7 @@ import {
   Prisma,
 } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
 const PROMPT_VERSION = 'qualification-v1.0.0';
 const CHAIN_VERSION = 'qualification-chain-v1.0.0';
@@ -36,7 +37,10 @@ export class AiResponseProcessor {
   private readonly eventStore: EventStore;
   private readonly vertexClient: VertexAIClient;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {
     this.eventStore = new EventStore(prisma);
     this.vertexClient = new VertexAIClient();
   }
@@ -279,6 +283,36 @@ export class AiResponseProcessor {
         metadata: { leadId, conversationId, inputTokens, outputTokens },
       }, { removeOnComplete: 1000 })
       .catch((err: unknown) => logger.error({ err, leadId }, 'ai-response: audit enqueue failed'));
+
+    // Step 7i: Emit Socket.IO events
+    this.realtimeEmitter.emitToWorkspace(workspaceId, 'message:new', {
+      conversationId,
+      messageId: message.id,
+      role: 'AI',
+      content,
+      createdAt: message.createdAt.toISOString(),
+    });
+    this.realtimeEmitter.emitToConversation(conversationId, 'message:new', {
+      conversationId,
+      messageId: message.id,
+      role: 'AI',
+      content,
+      createdAt: message.createdAt.toISOString(),
+    });
+
+    if (Object.keys(updatedQualification).length > 0) {
+      const updatedLead = await this.prisma.lead.findFirst({
+        where: { id: leadId, workspaceId },
+        select: { score: true, tier: true },
+      });
+      if (updatedLead) {
+        this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:scored', {
+          leadId,
+          score: updatedLead.score,
+          tier: updatedLead.tier,
+        });
+      }
+    }
 
     const totalMs = Date.now() - startMs;
     logger.info({ leadId, workspaceId, messageId: message.id, totalMs }, 'ai-response: completed');

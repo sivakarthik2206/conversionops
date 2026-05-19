@@ -5,6 +5,7 @@ import { queues, EventStore, transitionLead, NotificationService } from '@conver
 import type { LeadRoutingJobData } from '@conversionops/orchestration';
 import { RoutingStrategy, LeadStatus, NotificationType } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
 interface RoutingCandidate {
   workspaceUserId: string;
@@ -17,7 +18,10 @@ export class LeadRoutingProcessor {
   private readonly eventStore: EventStore;
   private readonly notificationService: NotificationService;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {
     this.eventStore = new EventStore(prisma);
     this.notificationService = new NotificationService(queues.notification);
   }
@@ -100,6 +104,12 @@ export class LeadRoutingProcessor {
         score: lead.score,
       })
       .catch((err: unknown) => logger.error({ err, leadId }, 'lead-routing: notification failed'));
+
+    this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:assigned', {
+      leadId,
+      workspaceUserId: candidate.workspaceUserId,
+      routingReason: candidate.reason,
+    });
 
     logger.info({ leadId, workspaceId, assignedTo: candidate.workspaceUserId }, 'lead-routing: assigned successfully');
   }

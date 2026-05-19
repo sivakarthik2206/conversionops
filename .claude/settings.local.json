@@ -13,7 +13,12 @@
       "Bash(python3 *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(xargs -I{} grep '\"version\"' {})"
+      "Bash(xargs -I{} grep '\"version\"' {})",
+      "Bash(pnpm --filter @conversionops/api run build)",
+      "Bash(xxd nest-cli.json)",
+      "Bash(pnpm --filter @conversionops/api add @socket.io/redis-adapter)",
+      "Bash(pnpm --filter @conversionops/worker add @socket.io/redis-emitter)",
+      "Bash(pnpm --filter @conversionops/app add @tanstack/react-query)"
     ]
   }
 }

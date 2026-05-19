@@ -8,6 +8,8 @@ import { LeadModule } from './modules/lead/lead.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { RoutingModule } from './modules/routing/routing.module';
+import { RealtimeGateway } from './gateway/realtime.gateway';
+import { WorkspaceRoomsService } from './gateway/workspace.rooms';
 import { TwilioSmsWebhookController } from './webhooks/twilio/sms.webhook';
 import { TwilioVoiceWebhookController } from './webhooks/twilio/voice.webhook';
 import { ZillowWebhookController } from './webhooks/zillow/zillow.webhook';
@@ -37,6 +39,8 @@ import { PrismaService } from './modules/prisma/prisma.service';
     GenericLeadWebhookController,
   ],
   providers: [
+    WorkspaceRoomsService,
+    RealtimeGateway,
     {
       provide: APP_GUARD,
       useFactory: (reflector: Reflector, prisma: PrismaService) =>

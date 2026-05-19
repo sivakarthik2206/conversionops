@@ -5,12 +5,16 @@ import { queues, EventStore } from '@conversionops/orchestration';
 import type { LeadIntakeJobData } from '@conversionops/orchestration';
 import { LeadSource, LeadStatus, ConversationStatus, MessageRole, Channel, Prisma } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
 @Injectable()
 export class LeadIntakeProcessor {
   private readonly eventStore: EventStore;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {
     this.eventStore = new EventStore(prisma);
   }
 
@@ -168,6 +172,13 @@ export class LeadIntakeProcessor {
     await queues.analyticsIngest
       .add('analytics-ingest', { leadId, workspaceId, event: isNew ? 'lead.created' : 'lead.message_received' }, { removeOnComplete: 1000 })
       .catch((err: unknown) => logger.error({ err, leadId }, 'lead-intake: analytics enqueue failed'));
+
+    this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:created', {
+      leadId,
+      source: source ?? 'SMS_INBOUND',
+      createdAt: new Date().toISOString(),
+      workspaceId,
+    });
 
     logger.info({ leadId, workspaceId, conversationId: conversation.id }, 'lead-intake: SMS lead processed');
   }
