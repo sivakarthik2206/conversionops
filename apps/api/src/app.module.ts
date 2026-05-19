@@ -9,6 +9,9 @@ import { ConversationModule } from './modules/conversation/conversation.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { AppointmentModule } from './modules/appointment/appointment.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { CalComWebhookController } from './webhooks/calcom/booking.webhook';
 import { CreateAppointmentHandler } from './modules/appointment/commands/create-appointment.handler';
 import { UpdateAppointmentHandler } from './modules/appointment/commands/update-appointment.handler';
@@ -36,6 +39,9 @@ import { PrismaService } from './modules/prisma/prisma.service';
     AgentModule,
     RoutingModule,
     AppointmentModule,
+    AnalyticsModule,
+    BillingModule,
+    AdminModule,
   ],
   controllers: [
     TwilioSmsWebhookController,

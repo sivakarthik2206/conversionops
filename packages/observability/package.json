@@ -4,6 +4,7 @@
   "private": true,
   "main": "./src/index.ts",
   "dependencies": {
+    "@conversionops/db": "workspace:*",
     "pino": "^9.0.0"
   },
   "devDependencies": {

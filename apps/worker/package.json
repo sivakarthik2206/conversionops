@@ -21,6 +21,7 @@
     "@nestjs/core": "^10.0.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "bullmq": "^5.0.0",
+    "resend": "^3.0.0",
     "ioredis": "^5.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",

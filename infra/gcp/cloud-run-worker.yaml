@@ -1,0 +1,71 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: conversionops-worker
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cpu-throttling: 'false'
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '3'
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:us-central1:conversionops-db
+    spec:
+      containerConcurrency: 1
+      timeoutSeconds: 300
+      serviceAccountName: conversionops-runner@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+        - image: us-central1-docker.pkg.dev/PROJECT_ID/conversionops/worker:latest
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: '2'
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: DATABASE_URL
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: REDIS_URL
+                  key: latest
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: TWILIO_ACCOUNT_SID
+                  key: latest
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: TWILIO_AUTH_TOKEN
+                  key: latest
+            - name: TWILIO_PHONE_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: TWILIO_PHONE_NUMBER
+                  key: latest
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: RESEND_API_KEY
+                  key: latest
+            - name: GOOGLE_CLOUD_PROJECT
+              value: PROJECT_ID
+            - name: VERTEX_AI_MODEL
+              value: gemini-1.5-flash-001
+            - name: CALCOM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: CALCOM_API_KEY
+                  key: latest
+            - name: FUB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: FUB_API_KEY
+                  key: latest

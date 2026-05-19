@@ -1,0 +1,83 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: conversionops-api
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cpu-throttling: 'false'
+        autoscaling.knative.dev/minScale: '1'
+        autoscaling.knative.dev/maxScale: '10'
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:us-central1:conversionops-db
+    spec:
+      containerConcurrency: 100
+      timeoutSeconds: 60
+      serviceAccountName: conversionops-runner@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+        - image: us-central1-docker.pkg.dev/PROJECT_ID/conversionops/api:latest
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: '1'
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: '3001'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: DATABASE_URL
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: REDIS_URL
+                  key: latest
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: JWT_SECRET
+                  key: latest
+            - name: MAGIC_LINK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: MAGIC_LINK_SECRET
+                  key: latest
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: TWILIO_ACCOUNT_SID
+                  key: latest
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: TWILIO_AUTH_TOKEN
+                  key: latest
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: STRIPE_SECRET_KEY
+                  key: latest
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: STRIPE_WEBHOOK_SECRET
+                  key: latest
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: RESEND_API_KEY
+                  key: latest
+            - name: GOOGLE_CLOUD_PROJECT
+              value: PROJECT_ID
+            - name: VERTEX_AI_MODEL
+              value: gemini-1.5-flash-001
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ADMIN_API_KEY
+                  key: latest

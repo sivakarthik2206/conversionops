@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { logger } from '@conversionops/observability';
-import { queues } from '@conversionops/orchestration';
 import type { NotificationJobData } from '@conversionops/orchestration';
 import { Channel, NotificationType, NotificationStatus, Prisma } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { TwilioClient } from '@conversionops/integrations';
+import { Resend } from 'resend';
 
 @Injectable()
 export class NotificationProcessor {
@@ -55,26 +56,28 @@ export class NotificationProcessor {
     });
 
     try {
-      if (channel === Channel.SMS) {
-        await queues.aiResponse
-          .add(
-            'send-sms-stub',
-            { notificationId: notification.id, phone: recipientPhone, body },
-            { removeOnComplete: 500 },
-          )
-          .catch((err: unknown) =>
-            logger.warn({ err, notificationId: notification.id }, 'notification: SMS stub enqueue failed'),
-          );
-      } else if (channel === Channel.EMAIL) {
-        await queues.aiResponse
-          .add(
-            'send-email-stub',
-            { notificationId: notification.id, email: recipientEmail, body },
-            { removeOnComplete: 500 },
-          )
-          .catch((err: unknown) =>
-            logger.warn({ err, notificationId: notification.id }, 'notification: email stub enqueue failed'),
-          );
+      if (channel === Channel.SMS && recipientPhone) {
+        const twilioClient = new TwilioClient(
+          process.env['TWILIO_ACCOUNT_SID'] ?? '',
+          process.env['TWILIO_AUTH_TOKEN'] ?? '',
+          process.env['TWILIO_PHONE_NUMBER'] ?? '',
+        );
+        const smsResult = await twilioClient.sendSMS({
+          to: recipientPhone as string,
+          body,
+          workspaceId: data.workspaceId ?? '',
+        }, this.prisma);
+        if (!smsResult.ok) {
+          logger.warn({ err: smsResult.error, notificationId: notification.id }, 'notification: SMS delivery failed');
+        }
+      } else if (channel === Channel.EMAIL && recipientEmail) {
+        const resend = new Resend(process.env['RESEND_API_KEY'] ?? '');
+        await resend.emails.send({
+          from: 'ConversionOps <notifications@conversionops.io>',
+          to: recipientEmail,
+          subject: data.type === NotificationType.AI_ESCALATION ? 'Escalation Alert — Action Required' : 'ConversionOps Notification',
+          text: body,
+        });
       }
 
       notification = await this.prisma.notification.update({

@@ -20,8 +20,8 @@ export type {
   LeadEvent,
   FeatureFlagOverride,
   OperationalMetric,
-  Prisma,
 } from '@prisma/client';
+export { Prisma } from '@prisma/client';
 export {
   LeadStatus,
   LeadTier,

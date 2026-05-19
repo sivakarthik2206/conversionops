@@ -31,7 +31,18 @@
       "Bash(pnpm --filter @conversionops/api add @nestjs/schedule)",
       "Bash(pnpm --filter @conversionops/worker add @nestjs/schedule)",
       "Bash(wait)",
-      "Bash(pnpm --filter @conversionops/integrations add zod)"
+      "Bash(pnpm --filter @conversionops/integrations add zod)",
+      "Bash(pnpm --filter @conversionops/api add stripe)",
+      "Bash(pnpm --filter @conversionops/observability add @conversionops/db)",
+      "Bash(node -e \"const s = require\\('stripe'\\); console.log\\(Object.keys\\(s\\).slice\\(0,5\\)\\)\")",
+      "PowerShell(pnpm list *)",
+      "PowerShell(pnpm store *)",
+      "PowerShell(pnpm *)",
+      "Read(//c/Users/Karthik/**)",
+      "Bash(pnpm store *)",
+      "Bash(xargs grep -l \"export = Stripe\\\\|export default Stripe\")",
+      "Bash(xargs grep -l \"StripeConstructor\")",
+      "Bash(pnpm view *)"
     ]
   }
 }
