@@ -1,8 +1,7 @@
 ﻿import type { Workspace, Lead } from '@conversionops/db';
 import { logger } from '@conversionops/observability';
-import { runRuleBasedCheck } from '../evals/scorers/hallucination.scorer';
+import { runRuleBasedCheck, scoreHallucination } from '../evals/scorers/hallucination.scorer';
 import type { VertexAIClient } from '../client';
-import { scoreHallucination } from '../evals/scorers/hallucination.scorer';
 
 export type GuardAction = 'allow' | 'warn' | 'block';
 

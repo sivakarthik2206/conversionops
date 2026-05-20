@@ -100,11 +100,6 @@ export async function runRegressionTests(
         continue;
       }
 
-      const humanMessages = fixture.messages
-        .filter(m => m.role === 'HUMAN')
-        .map(m => m.content)
-        .join(' ');
-
       const mockQual: QualificationData = {};
       const score = calculateScore(mockQual, fixture.messages.length);
       const tier = getTier(score);
