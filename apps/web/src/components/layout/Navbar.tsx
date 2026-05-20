@@ -1,74 +1,262 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { clsx } from 'clsx';
+
+const NAV_LINKS = [
+  { href: '#features', label: 'Features' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/demo', label: 'Demo' },
+];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20);
+    const handler = () => setScrolled(window.scrollY > 100);
     window.addEventListener('scroll', handler, { passive: true });
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
   return (
     <header
-      className={clsx('fixed top-0 left-0 right-0 z-50 transition-all duration-200', scrolled && 'border-b')}
       style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50,
+        height: 60,
         backdropFilter: 'blur(20px)',
-        background: 'rgba(10,10,11,0.8)',
-        borderColor: scrolled ? 'var(--border)' : 'transparent',
+        WebkitBackdropFilter: 'blur(20px)',
+        background: scrolled ? 'rgba(10,10,11,0.95)' : 'rgba(10,10,11,0.6)',
+        borderBottom: `1px solid ${scrolled ? 'var(--border)' : 'transparent'}`,
+        transition: 'background 0.3s ease, border-color 0.3s ease',
       }}
     >
-      <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="font-display text-xl" style={{ color: 'var(--text)' }}>
-          Conversion<span style={{ color: 'var(--accent)' }}>Ops</span>
+      <nav
+        style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          padding: '0 24px',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        {/* Logo */}
+        <Link
+          href="/"
+          style={{
+            fontFamily: "'DM Serif Display', Georgia, serif",
+            fontStyle: 'italic',
+            fontSize: 20,
+            color: 'var(--text)',
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          ConversionOps
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              display: 'inline-block',
+              marginLeft: 2,
+              boxShadow: '0 0 8px var(--accent)',
+            }}
+          />
         </Link>
 
-        <div className="hidden md:flex items-center gap-8">
-          {[
-            { href: '#features', label: 'Features' },
-            { href: '#demo', label: 'Demo' },
-            { href: '#pricing', label: 'Pricing' },
-          ].map(item => (
-            <a key={item.href} href={item.href} className="text-sm transition-colors hover:text-[var(--text)]" style={{ color: 'var(--text-2)' }}>
+        {/* Desktop nav links */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 32,
+          }}
+          className="hidden-mobile"
+        >
+          {NAV_LINKS.map(item => (
+            <a
+              key={item.href}
+              href={item.href}
+              style={{
+                fontSize: 14,
+                color: 'var(--text-2)',
+                textDecoration: 'none',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-2)'; }}
+            >
               {item.label}
             </a>
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
-          <Link href="https://app.conversionops.io/login" className="text-sm transition-colors hover:text-[var(--text)]" style={{ color: 'var(--text-2)' }}>
+        {/* Desktop CTA */}
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 16 }}
+          className="hidden-mobile"
+        >
+          <Link
+            href="https://app.conversionops.in/login"
+            style={{
+              fontSize: 14,
+              color: 'var(--text-3)',
+              textDecoration: 'none',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-3)'; }}
+          >
             Sign in
           </Link>
-          <Link href="/demo"
-            className="h-9 px-4 text-sm font-medium rounded-lg inline-flex items-center transition-colors"
-            style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--accent-hover)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--accent)'; }}>
-            Get started ?
+          <Link
+            href="/book"
+            style={{
+              height: 36,
+              padding: '0 18px',
+              fontSize: 14,
+              fontWeight: 600,
+              borderRadius: 8,
+              background: 'var(--accent)',
+              color: '#000',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              transition: 'background 0.15s, transform 0.15s',
+            }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLAnchorElement;
+              el.style.background = 'var(--accent-hover)';
+              el.style.transform = 'scale(1.02)';
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLAnchorElement;
+              el.style.background = 'var(--accent)';
+              el.style.transform = 'scale(1)';
+            }}
+          >
+            Get Started
           </Link>
         </div>
 
-        <button className="md:hidden p-2" onClick={() => setMenuOpen(o => !o)} style={{ color: 'var(--text-2)' }} aria-label="Toggle menu">
-          <div className="space-y-1.5">
-            <span className="block w-5 h-px" style={{ background: 'currentColor' }} />
-            <span className="block w-5 h-px" style={{ background: 'currentColor' }} />
-            <span className="block w-5 h-px" style={{ background: 'currentColor' }} />
-          </div>
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="Toggle menu"
+          aria-expanded={menuOpen}
+          className="show-mobile"
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 8,
+            color: 'var(--text-2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 5,
+          }}
+        >
+          <span
+            style={{
+              display: 'block',
+              width: 20,
+              height: 1.5,
+              background: 'currentColor',
+              borderRadius: 1,
+              transition: 'transform 0.2s, opacity 0.2s',
+              transform: menuOpen ? 'translateY(6.5px) rotate(45deg)' : 'none',
+            }}
+          />
+          <span
+            style={{
+              display: 'block',
+              width: 20,
+              height: 1.5,
+              background: 'currentColor',
+              borderRadius: 1,
+              transition: 'opacity 0.2s',
+              opacity: menuOpen ? 0 : 1,
+            }}
+          />
+          <span
+            style={{
+              display: 'block',
+              width: 20,
+              height: 1.5,
+              background: 'currentColor',
+              borderRadius: 1,
+              transition: 'transform 0.2s, opacity 0.2s',
+              transform: menuOpen ? 'translateY(-6.5px) rotate(-45deg)' : 'none',
+            }}
+          />
         </button>
       </nav>
 
+      {/* Mobile drawer */}
       {menuOpen && (
-        <div className="md:hidden px-6 pb-4 flex flex-col gap-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <a href="#features" onClick={() => setMenuOpen(false)} className="text-sm py-2" style={{ color: 'var(--text-2)' }}>Features</a>
-          <a href="#demo" onClick={() => setMenuOpen(false)} className="text-sm py-2" style={{ color: 'var(--text-2)' }}>Demo</a>
-          <a href="#pricing" onClick={() => setMenuOpen(false)} className="text-sm py-2" style={{ color: 'var(--text-2)' }}>Pricing</a>
-          <Link href="/demo" className="text-sm py-2 font-medium" style={{ color: 'var(--accent)' }}>Get started ?</Link>
+        <div
+          className="animate-slide-down"
+          style={{
+            borderTop: '1px solid var(--border)',
+            background: 'rgba(10,10,11,0.97)',
+            padding: '16px 24px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}
+        >
+          {NAV_LINKS.map(item => (
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={() => setMenuOpen(false)}
+              style={{
+                fontSize: 16,
+                color: 'var(--text-2)',
+                textDecoration: 'none',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              {item.label}
+            </a>
+          ))}
+          <Link
+            href="/book"
+            onClick={() => setMenuOpen(false)}
+            style={{
+              marginTop: 16,
+              height: 44,
+              borderRadius: 8,
+              background: 'var(--accent)',
+              color: '#000',
+              fontWeight: 600,
+              fontSize: 15,
+              textDecoration: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            Get Started
+          </Link>
         </div>
       )}
+
+      <style>{`
+        @media (min-width: 768px) { .show-mobile { display: none !important; } }
+        @media (max-width: 767px) { .hidden-mobile { display: none !important; } }
+      `}</style>
     </header>
   );
 }

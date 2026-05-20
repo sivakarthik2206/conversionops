@@ -1,123 +1,273 @@
-import React from 'react';
-
 const PLANS = [
   {
     name: 'Solo Agent',
+    badge: null,
     setup: '$3,500',
     monthly: '$750/mo',
-    description: 'For individual agents ready to stop losing leads at night and weekends.',
+    desc: 'For individual agents ready to stop losing leads at night and on weekends.',
     features: [
-      'AI responds in < 60 seconds, 24/7',
-      'SMS + email lead qualification',
-      '7-question scoring system',
-      'Cal.com appointment booking',
-      '2M AI tokens/month',
-      'Twilio number included',
+      '1 AI agent',
+      'Zillow + missed call intake',
+      'Qualification + booking',
+      'Follow Up Boss sync',
+      '2M tokens/month',
+      'Email support',
     ],
-    cta: 'Get started →',
+    cta: 'Get started',
     featured: false,
   },
   {
-    name: 'Brokerage',
+    name: 'Small Brokerage',
+    badge: 'Most Popular',
     setup: '$12,000',
     monthly: '$2,500/mo',
-    description: 'For brokerages routing leads across agents automatically.',
+    desc: 'For brokerages routing leads across agents with full analytics.',
     features: [
       'Everything in Solo',
-      'Multi-agent routing engine',
-      'Follow Up Boss CRM sync',
-      'Priority + language routing',
-      '10M AI tokens/month',
-      'Dedicated onboarding',
+      'Up to 15 agents',
+      'Advanced routing rules',
+      'Agent performance analytics',
+      'Priority support',
+      '10M tokens/month',
       'Custom AI persona per agent',
     ],
-    cta: 'Book a demo →',
+    cta: 'Get started',
     featured: true,
   },
   {
     name: 'Enterprise',
+    badge: null,
     setup: 'Custom',
-    monthly: 'Custom pricing',
-    description: 'For multi-office brokerages and teams with custom compliance requirements.',
+    monthly: "Let's talk",
+    desc: 'For large brokerages with custom compliance and integration needs.',
     features: [
       'Everything in Brokerage',
-      'Unlimited AI tokens',
+      'Unlimited agents',
+      'White-label option',
+      'Dedicated success manager',
+      'Custom integrations',
       'SLA guarantee',
-      'Custom compliance review',
-      'White-label AI persona',
-      'Dedicated support engineer',
     ],
-    cta: 'Contact sales →',
+    cta: 'Contact us',
     featured: false,
   },
 ];
 
+const TRUST = [
+  { icon: '🔒', text: 'TCPA compliant' },
+  { icon: '🏠', text: 'Fair Housing certified' },
+  { icon: '⚡', text: '99.9% uptime SLA' },
+];
+
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-24 px-4" style={{ background: 'var(--bg)' }}>
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-16">
-          <p className="text-xs uppercase tracking-widest mb-4" style={{ color: 'var(--accent)' }}>Pricing</p>
-          <h2 className="text-4xl mb-4" style={{ fontFamily: "'DM Serif Display', serif", fontStyle: 'italic', color: 'var(--text)' }}>
-            One flat rate. No per-lead fees.
+    <section
+      id="pricing"
+      style={{ padding: '120px 24px', background: 'var(--bg)' }}
+    >
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 64 }}>
+          <p
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              color: 'var(--accent)',
+              marginBottom: 16,
+            }}
+          >
+            Pricing
+          </p>
+          <h2
+            style={{
+              fontFamily: "'DM Serif Display', Georgia, serif",
+              fontSize: 'clamp(32px, 5vw, 48px)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              color: 'var(--text)',
+              margin: 0,
+            }}
+          >
+            Simple, transparent pricing
           </h2>
-          <p className="text-lg max-w-xl mx-auto" style={{ color: 'var(--text-2)' }}>
-            Setup covers everything. Monthly covers hosting, AI, and support.
+          <p
+            style={{
+              marginTop: 14,
+              fontSize: 16,
+              color: 'var(--text-2)',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}
+          >
+            No contracts. Cancel anytime. Setup included.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          {PLANS.map((plan) => (
+        {/* Cards */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 20,
+            alignItems: 'start',
+            marginBottom: 56,
+          }}
+        >
+          {PLANS.map(plan => (
             <div
               key={plan.name}
-              className="rounded-[16px] p-6 flex flex-col"
               style={{
-                background: plan.featured ? 'var(--bg-2)' : 'var(--bg-2)',
-                border: plan.featured ? '2px solid var(--accent)' : '1px solid var(--border)',
+                background: 'var(--bg-2)',
+                border: plan.featured ? '1px solid var(--accent)' : '1px solid var(--border)',
+                borderRadius: 12,
+                padding: 28,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0,
+                position: 'relative',
                 boxShadow: plan.featured ? 'var(--shadow-accent)' : 'none',
               }}
             >
-              {plan.featured && (
+              {/* Badge */}
+              {plan.badge && (
                 <div
-                  className="text-xs font-semibold px-3 py-1 rounded-full self-start mb-4"
-                  style={{ background: 'var(--accent)', color: 'var(--bg)' }}
+                  style={{
+                    position: 'absolute',
+                    top: -1,
+                    right: 24,
+                    background: 'var(--accent)',
+                    color: '#000',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    padding: '4px 10px',
+                    borderRadius: '0 0 6px 6px',
+                  }}
                 >
-                  Most popular
+                  {plan.badge}
                 </div>
               )}
-              <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--text)' }}>{plan.name}</h3>
-              <p className="text-sm mb-4" style={{ color: 'var(--text-3)' }}>{plan.description}</p>
 
-              <div className="mb-2">
-                <span className="text-3xl font-bold" style={{ fontFamily: "'DM Serif Display', serif", color: plan.featured ? 'var(--accent)' : 'var(--text)' }}>
+              {/* Plan name */}
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--text-2)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  marginBottom: 16,
+                }}
+              >
+                {plan.name}
+              </div>
+
+              {/* Setup price */}
+              <div style={{ marginBottom: 4 }}>
+                <span
+                  style={{
+                    fontFamily: "'DM Serif Display', Georgia, serif",
+                    fontSize: plan.featured ? 48 : 40,
+                    lineHeight: 1,
+                    color: plan.featured ? 'var(--accent)' : 'var(--text)',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
                   {plan.setup}
                 </span>
-                <span className="text-sm ml-1" style={{ color: 'var(--text-3)' }}>setup</span>
-              </div>
-              <div className="mb-6">
-                <span className="text-xl font-semibold" style={{ color: 'var(--text)' }}>{plan.monthly}</span>
+                {plan.setup !== 'Custom' && (
+                  <span style={{ fontSize: 13, color: 'var(--text-3)', marginLeft: 6 }}>setup</span>
+                )}
               </div>
 
-              <ul className="space-y-2 mb-8 flex-1">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
-                    <span style={{ color: 'var(--green)' }}>✓</span>
+              {/* Monthly */}
+              <div style={{ marginBottom: 16 }}>
+                <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)' }}>
+                  + {plan.monthly}
+                </span>
+              </div>
+
+              {/* Description */}
+              <p style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6, marginBottom: 20, margin: '0 0 20px' }}>
+                {plan.desc}
+              </p>
+
+              {/* Divider */}
+              <div style={{ height: 1, background: 'var(--border)', marginBottom: 20 }} />
+
+              {/* Features */}
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {plan.features.map(feature => (
+                  <li
+                    key={feature}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14, color: 'var(--text-2)' }}
+                  >
+                    <span style={{ color: 'var(--green)', flexShrink: 0, marginTop: 1 }}>✓</span>
                     {feature}
                   </li>
                 ))}
               </ul>
 
+              {/* CTA */}
               <a
                 href="/book"
-                className="block text-center py-3 rounded-[8px] text-sm font-semibold transition-all"
                 style={{
+                  display: 'block',
+                  textAlign: 'center',
+                  padding: '12px 0',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'all 0.15s',
                   background: plan.featured ? 'var(--accent)' : 'transparent',
-                  color: plan.featured ? 'var(--bg)' : 'var(--text)',
-                  border: plan.featured ? 'none' : '1px solid var(--border)',
+                  color: plan.featured ? '#000' : 'var(--text-2)',
+                  border: plan.featured ? 'none' : '1px solid var(--border-light)',
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLAnchorElement;
+                  if (plan.featured) {
+                    el.style.filter = 'brightness(1.08)';
+                  } else {
+                    el.style.borderColor = 'var(--border-focus)';
+                    el.style.color = 'var(--text)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLAnchorElement;
+                  el.style.filter = 'brightness(1)';
+                  el.style.borderColor = 'var(--border-light)';
+                  el.style.color = plan.featured ? '#000' : 'var(--text-2)';
                 }}
               >
                 {plan.cta}
               </a>
+            </div>
+          ))}
+        </div>
+
+        {/* Trust row */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 48,
+            flexWrap: 'wrap',
+            paddingTop: 32,
+            borderTop: '1px solid var(--border)',
+          }}
+        >
+          {TRUST.map(item => (
+            <div
+              key={item.text}
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <span style={{ fontSize: 18 }}>{item.icon}</span>
+              <span style={{ fontSize: 14, color: 'var(--text-3)', fontWeight: 500 }}>{item.text}</span>
             </div>
           ))}
         </div>
