@@ -1,5 +1,6 @@
 export { TwilioClient } from './comms/twilio';
-export type { SendSMSOptions, ProvisionedNumber } from './comms/twilio';
+export type { SendSMSOptions } from './comms/twilio';
+export { ResendClient } from './comms/resend';
 
 export { FollowUpBossClient } from './crm/follow-up-boss/client';
 export type { FUBContactInput, FUBContact } from './crm/follow-up-boss/client';

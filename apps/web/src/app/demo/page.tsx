@@ -1,7 +1,7 @@
 import LiveDemo from '@/components/sections/LiveDemo';
 
 export const metadata = {
-  title: 'Live Demo — ConversionOps',
+  title: 'Live Demo â€” ConversionOps',
   description: 'See the AI in action. No signup required.',
 };
 
@@ -27,7 +27,7 @@ export default function DemoPage() {
         <p className="text-base mb-8" style={{ color: 'var(--text-2)' }}>Setup takes 10 minutes. First lead response in 60 seconds.</p>
         <a href="/pricing" className="h-12 px-8 text-base font-medium rounded-xl inline-flex items-center transition-colors"
           style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-          View pricing ?
+          View pricing &rarr;
         </a>
       </div>
     </main>

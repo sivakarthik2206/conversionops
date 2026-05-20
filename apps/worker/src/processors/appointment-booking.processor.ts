@@ -1,84 +1,118 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { logger } from '@conversionops/observability';
-import { queues } from '@conversionops/orchestration';
 import type { AppointmentBookingJobData } from '@conversionops/orchestration';
-import { TwilioClient, CalComClient } from '@conversionops/integrations';
-import { ConversationStatus } from '@conversionops/db';
+import { CalComClient } from '@conversionops/integrations';
+import { MessageRole, NotificationType } from '@conversionops/db';
+import { isQuietHours, validateConsent } from '@conversionops/compliance';
+import { TwilioClient } from '@conversionops/integrations';
+import { queues, NotificationService } from '@conversionops/orchestration';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
 @Injectable()
 export class AppointmentBookingProcessor {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly notificationService: NotificationService;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {
+    this.notificationService = new NotificationService(queues.notification);
+  }
 
   /**
-   * Sends a booking link to a lead when qualification detects shouldBook=true.
-   * Uses Cal.com link if configured, otherwise a plain text invitation.
+   * Sends a personalised Cal.com booking link to the lead via SMS.
+   * Checks TCPA consent and quiet hours before sending.
    */
   async process(job: Job<AppointmentBookingJobData>): Promise<void> {
     const { leadId, workspaceId, conversationId } = job.data;
 
-    const [lead, workspace] = await Promise.all([
-      this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } }),
-      this.prisma.workspace.findFirst({ where: { id: workspaceId, deletedAt: null } }),
-    ]);
+    try {
+      const [lead, workspace] = await Promise.all([
+        this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } }),
+        this.prisma.workspace.findUnique({ where: { id: workspaceId } }),
+      ]);
 
-    if (!lead || !workspace || !lead.phone || !workspace.twilioNumber) {
-      logger.warn({ leadId, workspaceId }, 'appointment-booking: missing lead/workspace/phone, skipping');
-      return;
+      if (!lead || !workspace) {
+        logger.warn({ leadId, workspaceId }, 'appointment-booking: lead or workspace not found');
+        return;
+      }
+
+      if (!lead.phone) {
+        logger.warn({ leadId }, 'appointment-booking: lead has no phone, cannot send booking link');
+        return;
+      }
+
+      if (isQuietHours(workspace.timezone)) {
+        logger.info({ workspaceId, leadId }, 'appointment-booking: quiet hours, deferring');
+        return;
+      }
+
+      const hasConsent = await validateConsent(lead.phone, workspaceId, this.prisma);
+      if (!hasConsent) {
+        logger.warn({ leadId, phone: lead.phone }, 'appointment-booking: no TCPA consent, skipping');
+        return;
+      }
+
+      const config = workspace.aiConfig as Record<string, unknown>;
+      const calcomApiKey = config?.['calcomApiKey'] as string | undefined;
+      const calcomEventTypeId = config?.['calcomEventTypeId'] as number | undefined;
+
+      let bookingLink = config?.['defaultBookingLink'] as string | undefined;
+
+      if (calcomEventTypeId) {
+        const calClient = new CalComClient(calcomApiKey ?? '');
+        const link = calClient.createBookingLink(calcomEventTypeId, {
+          name: lead.name ?? 'Lead',
+          email: lead.email ?? '',
+          phone: lead.phone ?? undefined,
+        });
+        bookingLink = link;
+      }
+
+      if (!bookingLink) {
+        logger.warn({ leadId, workspaceId }, 'appointment-booking: no booking link available');
+        return;
+      }
+
+      const agentName = (config?.['agentName'] as string | undefined) ?? workspace.name;
+      const messageBody = `Hi! ${agentName} here — I'd love to connect. Book a quick call: ${bookingLink}`;
+
+      const twilio = new TwilioClient(
+        process.env['TWILIO_ACCOUNT_SID'] ?? '',
+        process.env['TWILIO_AUTH_TOKEN'] ?? '',
+        workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
+      );
+
+      const smsResult = await twilio.sendSMS({ to: lead.phone, body: messageBody, workspaceId }, this.prisma);
+
+      if (smsResult.ok && conversationId) {
+        await this.prisma.message.create({
+          data: {
+            workspaceId,
+            conversationId,
+            role: MessageRole.AI,
+            content: messageBody,
+            providerMessageId: smsResult.value,
+          },
+        });
+
+        this.realtimeEmitter.emitToWorkspace(workspaceId, 'message:new', {
+          conversationId,
+          role: 'AI',
+          content: messageBody,
+        });
+      }
+
+      if (!smsResult.ok) {
+        logger.error({ err: smsResult.error, leadId }, 'appointment-booking: SMS failed');
+      } else {
+        logger.info({ leadId, workspaceId }, 'appointment-booking: booking link sent');
+      }
+    } catch (err) {
+      logger.error({ err, leadId, workspaceId }, 'appointment-booking: processing error');
+      throw err;
     }
-
-    const aiConfig = workspace.aiConfig as Record<string, unknown>;
-    const agentName = typeof aiConfig['agentName'] === 'string' ? aiConfig['agentName'] : 'our team';
-    const calApiKey = typeof aiConfig['calComApiKey'] === 'string' ? aiConfig['calComApiKey'] : null;
-    const calEventTypeId = typeof aiConfig['calComEventTypeId'] === 'number' ? aiConfig['calComEventTypeId'] : null;
-
-    const twilioClient = new TwilioClient(
-      process.env['TWILIO_ACCOUNT_SID'] ?? '',
-      process.env['TWILIO_AUTH_TOKEN'] ?? '',
-      workspace.twilioNumber,
-    );
-
-    let messageBody: string;
-
-    if (calApiKey && calEventTypeId) {
-      const calClient = new CalComClient(calApiKey);
-      const bookingLink = calClient.createBookingLink(calEventTypeId, {
-        name: lead.name ?? undefined,
-        email: lead.email ?? undefined,
-        phone: lead.phone,
-      });
-      messageBody = `Great! Here is a link to book directly with ${agentName}: ${bookingLink} — takes 30 seconds.`;
-    } else {
-      messageBody = `I would love to schedule a showing for you — reply with your preferred day and time and ${agentName} will reach out to confirm.`;
-    }
-
-    const smsResult = await twilioClient.sendSMS(
-      { to: lead.phone, body: messageBody, workspaceId, workspaceTimezone: workspace.timezone },
-      this.prisma,
-    );
-
-    if (!smsResult.ok) {
-      logger.error({ err: smsResult.error, leadId }, 'appointment-booking: SMS send failed');
-      return;
-    }
-
-    if (conversationId) {
-      await this.prisma.conversation.update({
-        where: { id: conversationId, workspaceId },
-        data: { status: ConversationStatus.APPOINTMENT_PENDING },
-      });
-    }
-
-    // 24-hour follow-up reminder
-    await queues.appointmentBooking
-      .add(
-        'booking-reminder',
-        { leadId, workspaceId, conversationId },
-        { delay: 86_400_000, removeOnComplete: 100 },
-      )
-      .catch((err: unknown) => logger.warn({ err, leadId }, 'appointment-booking: reminder enqueue failed'));
-
-    logger.info({ leadId, workspaceId }, 'appointment-booking: booking message sent');
   }
 }

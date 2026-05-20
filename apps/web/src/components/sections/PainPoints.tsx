@@ -3,10 +3,10 @@ import { useEffect, useRef } from 'react';
 import { clsx } from 'clsx';
 
 const PAINS = [
-  { stat: '78%', text: 'of real estate leads never get a response within the first hour — and go cold forever.' },
+  { stat: '78%', text: 'of real estate leads never get a response within the first hour â€” and go cold forever.' },
   { stat: '$47k', text: 'average deal lost to a competitor who responded 10 minutes faster than you.' },
   { stat: '3am', text: 'Zillow does not care about your sleep schedule. Leads arrive at all hours.' },
-  { stat: '6×', text: 'more likely to qualify a lead when you respond in under 60 seconds vs 60 minutes.' },
+  { stat: '6x', text: 'more likely to qualify a lead when you respond in under 60 seconds vs 60 minutes.' },
   { stat: '89%', text: 'of buyers work with the first agent who responds. Are you that agent right now?' },
   { stat: '$0', text: "What your missed leads cost you while you're showing properties, sleeping, or on vacation." },
 ];

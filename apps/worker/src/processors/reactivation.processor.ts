@@ -1,141 +1,136 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { logger } from '@conversionops/observability';
-import { queues, EventStore, transitionLead } from '@conversionops/orchestration';
 import type { ReactivationJobData } from '@conversionops/orchestration';
+import { queues } from '@conversionops/orchestration';
+import { LeadStatus, ConversationStatus, Channel, MessageRole } from '@conversionops/db';
+import { isQuietHours, validateConsent } from '@conversionops/compliance';
 import { TwilioClient } from '@conversionops/integrations';
-import { isOptOutKeyword, isQuietHours, getNextAllowedTime, validateConsent } from '@conversionops/compliance';
-import { LeadStatus, ConsentStatus } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
+
+const MAX_REACTIVATION_COUNT = 3;
 
 @Injectable()
 export class ReactivationProcessor {
-  private readonly eventStore: EventStore;
-
-  constructor(private readonly prisma: PrismaService) {
-    this.eventStore = new EventStore(prisma);
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {}
 
   /**
-   * Sends a personalised reactivation SMS to a dormant lead.
-   * Respects all TCPA rules. Increments reactivationCount. Max 3 attempts.
+   * Reactivates a dormant lead with a personalised re-engagement message.
+   * Enforces: max 3 reactivation attempts, consent check, quiet hours.
    */
   async process(job: Job<ReactivationJobData>): Promise<void> {
     const { leadId, workspaceId } = job.data;
 
-    const lead = await this.prisma.lead.findFirst({
-      where: { id: leadId, workspaceId, status: LeadStatus.DORMANT, deletedAt: null },
-    });
+    try {
+      const [lead, workspace] = await Promise.all([
+        this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } }),
+        this.prisma.workspace.findUnique({ where: { id: workspaceId } }),
+      ]);
 
-    if (!lead) {
-      logger.info({ leadId, workspaceId }, 'reactivation: lead not found or not DORMANT, skipping');
-      return;
-    }
+      if (!lead || !workspace) {
+        logger.warn({ leadId, workspaceId }, 'reactivation: lead or workspace not found');
+        return;
+      }
 
-    if (lead.reactivationCount >= 3) {
-      logger.info({ leadId }, 'reactivation: max reactivation attempts reached');
-      return;
-    }
+      if (lead.reactivationCount >= MAX_REACTIVATION_COUNT) {
+        logger.info({ leadId, count: lead.reactivationCount }, 'reactivation: max attempts reached, skipping');
+        return;
+      }
 
-    if (!lead.phone) {
-      logger.info({ leadId }, 'reactivation: no phone number, skipping');
-      return;
-    }
+      if (!lead.phone) {
+        logger.warn({ leadId }, 'reactivation: no phone number, skipping');
+        return;
+      }
 
-    const hasConsent = await validateConsent(lead.phone, workspaceId, this.prisma);
-    if (!hasConsent) {
-      logger.info({ leadId }, 'reactivation: no consent, skipping');
-      return;
-    }
+      if (isQuietHours(workspace.timezone)) {
+        logger.info({ workspaceId, leadId }, 'reactivation: quiet hours, skipping');
+        return;
+      }
 
-    const workspace = await this.prisma.workspace.findFirst({
-      where: { id: workspaceId, deletedAt: null },
-    });
-    if (!workspace || !workspace.twilioNumber) return;
+      const hasConsent = await validateConsent(lead.phone, workspaceId, this.prisma);
+      if (!hasConsent) {
+        logger.warn({ leadId, phone: lead.phone }, 'reactivation: no consent, skipping');
+        return;
+      }
 
-    const timezone = workspace.timezone ?? 'America/New_York';
-    if (isQuietHours(timezone)) {
-      const nextAllowed = getNextAllowedTime(timezone);
-      const delayMs = Math.max(0, nextAllowed.getTime() - Date.now());
-      await queues.reactivation.add(
-        'reactivate',
-        { leadId, workspaceId },
-        { delay: delayMs, removeOnComplete: 100 },
+      const config = workspace.aiConfig as Record<string, unknown>;
+      const agentName = (config?.['agentName'] as string | undefined) ?? workspace.name;
+      const message = buildReactivationMessage(agentName, lead.reactivationCount);
+
+      const twilio = new TwilioClient(
+        process.env['TWILIO_ACCOUNT_SID'] ?? '',
+        process.env['TWILIO_AUTH_TOKEN'] ?? '',
+        workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
       );
-      logger.info({ leadId, nextAllowed }, 'reactivation: quiet hours, rescheduled');
-      return;
-    }
 
-    const qual = lead.qualification as Record<string, unknown>;
-    const aiConfig = workspace.aiConfig as Record<string, unknown>;
-    const agentName = typeof aiConfig['agentName'] === 'string' ? aiConfig['agentName'] : 'our team';
-    const leadName = lead.name?.split(' ')[0] ?? 'there';
+      const smsResult = await twilio.sendSMS({ to: lead.phone, body: message, workspaceId }, this.prisma);
 
-    const lines: string[] = [];
-    const area = typeof qual['area'] === 'string' ? qual['area'] : null;
-    const budget = typeof qual['budget'] === 'string' ? qual['budget'] : null;
-    const timeline = typeof qual['timeline'] === 'string' ? qual['timeline'] : null;
+      if (!smsResult.ok) {
+        logger.error({ err: smsResult.error, leadId }, 'reactivation: SMS failed');
+        return;
+      }
 
-    if (area) {
-      lines.push(`Hi ${leadName}! We spoke a while back about finding a home in ${area}.`);
-    } else {
-      lines.push(`Hi ${leadName}! We connected a while back about real estate.`);
-    }
-    if (budget) lines.push(`Homes in your range (around ${budget}) are moving fast right now.`);
-    if (timeline === 'near_term' || timeline === '90_days') {
-      lines.push('Have your plans changed at all?');
-    }
-    lines.push(`Would you still like some help? Just reply YES and ${agentName} will pick up right where we left off.`);
-
-    const messageBody = lines.join(' ');
-
-    if (isOptOutKeyword(messageBody)) return;
-
-    const twilioClient = new TwilioClient(
-      process.env['TWILIO_ACCOUNT_SID'] ?? '',
-      process.env['TWILIO_AUTH_TOKEN'] ?? '',
-      workspace.twilioNumber,
-    );
-
-    const smsResult = await twilioClient.sendSMS(
-      { to: lead.phone, body: messageBody, workspaceId, workspaceTimezone: timezone },
-      this.prisma,
-    );
-
-    if (!smsResult.ok) {
-      logger.error({ err: smsResult.error, leadId }, 'reactivation: SMS failed');
-      return;
-    }
-
-    await this.prisma.lead.update({
-      where: { id: leadId, workspaceId },
-      data: {
-        reactivationCount: { increment: 1 },
-        lastReactivatedAt: new Date(),
-        status: LeadStatus.REACTIVATED,
-      },
-    });
-
-    const newStatus = transitionLead(lead.status, { type: 'REACTIVATE' }, { leadId, workspaceId });
-    if (newStatus !== LeadStatus.REACTIVATED) {
+      // Update lead status and increment reactivation count
       await this.prisma.lead.update({
-        where: { id: leadId, workspaceId },
-        data: { status: newStatus },
+        where: { id: leadId },
+        data: {
+          status: LeadStatus.REACTIVATED,
+          reactivationCount: { increment: 1 },
+        },
       });
+
+      // Find or create conversation
+      const conversation = await this.prisma.conversation.findFirst({
+        where: { leadId, workspaceId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+      }) ?? await this.prisma.conversation.create({
+        data: {
+          workspaceId,
+          leadId,
+          channel: Channel.SMS,
+          status: ConversationStatus.AI_ACTIVE,
+          aiActive: true,
+        },
+      });
+
+      await this.prisma.message.create({
+        data: {
+          workspaceId,
+          conversationId: conversation.id,
+          role: MessageRole.AI,
+          content: message,
+          providerMessageId: smsResult.value,
+        },
+      });
+
+      this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:scored', {
+        leadId,
+        status: LeadStatus.REACTIVATED,
+      });
+
+      void queues.aiResponse.add('reactivation-followup', {
+        leadId,
+        workspaceId,
+        conversationId: conversation.id,
+      }, { removeOnComplete: 1000 });
+
+      logger.info({ leadId, workspaceId, count: lead.reactivationCount + 1 }, 'reactivation: complete');
+    } catch (err) {
+      logger.error({ err, leadId, workspaceId }, 'reactivation: processing error');
+      throw err;
     }
-
-    await this.eventStore.append({
-      leadId, workspaceId, type: 'lead.reactivated',
-      payload: { reactivationCount: lead.reactivationCount + 1, messageBody },
-      triggerSource: 'reactivation-processor',
-    });
-
-    await queues.leadIntake.add(
-      'reactivated-lead',
-      { leadId, workspaceId, source: 'REACTIVATION' },
-      { removeOnComplete: 500, priority: 3 },
-    ).catch((err: unknown) => logger.error({ err, leadId }, 'reactivation: lead-intake enqueue failed'));
-
-    logger.info({ leadId, workspaceId, reactivationCount: lead.reactivationCount + 1 }, 'reactivation: message sent');
   }
+}
+
+function buildReactivationMessage(agentName: string, attempt: number): string {
+  const messages = [
+    `Hi! This is ${agentName}'s assistant. Just checking in — are you still interested in buying or selling a home? Happy to help whenever you're ready!`,
+    `Hi! Following up on your real estate inquiry. The market has been moving fast — want to chat about your options? Reply YES and I'll get you connected.`,
+    `Last check-in: Are you still looking for a home? I have some great new listings that might interest you. Reply STOP anytime to opt out.`,
+  ];
+  return messages[Math.min(attempt, messages.length - 1)] ?? messages[0]!;
 }

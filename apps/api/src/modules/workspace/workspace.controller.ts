@@ -45,7 +45,7 @@ export class WorkspaceController {
   constructor(private readonly workspaceService: WorkspaceService) {}
 
   @Get('me')
-  @RequirePermission('workspace:read')
+  @RequirePermission('settings:read')
   async getMyWorkspace(
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
   ): Promise<WorkspaceDto> {
@@ -55,7 +55,7 @@ export class WorkspaceController {
   }
 
   @Patch('me')
-  @RequirePermission('workspace:write')
+  @RequirePermission('settings:write')
   async updateMyWorkspace(
     @CurrentUser() user: AuthenticatedUser,
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
@@ -72,7 +72,7 @@ export class WorkspaceController {
   }
 
   @Get('me/health')
-  @RequirePermission('workspace:read')
+  @RequirePermission('settings:read')
   async getHealth(
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
   ): Promise<WorkspaceDto> {
@@ -82,7 +82,7 @@ export class WorkspaceController {
   }
 
   @Patch('me/ai-config')
-  @RequirePermission('ai:configure')
+  @RequirePermission('agent:write')
   async updateAiConfig(
     @CurrentUser() user: AuthenticatedUser,
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
@@ -97,7 +97,7 @@ export class WorkspaceController {
 
   @Post('me/ai/pause')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermission('ai:pause')
+  @RequirePermission('agent:suspend')
   async pauseAI(
     @CurrentUser() user: AuthenticatedUser,
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
@@ -108,7 +108,7 @@ export class WorkspaceController {
 
   @Post('me/ai/resume')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermission('ai:pause')
+  @RequirePermission('agent:suspend')
   async resumeAI(
     @CurrentUser() user: AuthenticatedUser,
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,

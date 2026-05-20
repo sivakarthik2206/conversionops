@@ -4,119 +4,129 @@ import { useState, useEffect, useCallback } from 'react';
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/v1';
 const ADMIN_KEY = process.env['NEXT_PUBLIC_ADMIN_API_KEY'] ?? '';
 
-interface HealthData {
+interface PlatformHealth {
   status: 'healthy' | 'degraded' | 'down';
-  aiP50Ms: number;
-  aiP95Ms: number;
-  twilioP95Ms: number;
-  worstQueueLag: number;
-  crmSuccessRate: number;
-  checkedAt: string;
+  lastUpdated: string;
+  metrics: {
+    aiLatencyP95Ms: number;
+    twilioLatencyP95Ms: number;
+    queueLagMs: number;
+    crmSyncSuccessRate: number;
+    activeWorkspaces: number;
+    totalLeads24h: number;
+  };
+  services: {
+    api: 'up' | 'down';
+    worker: 'up' | 'down';
+    database: 'up' | 'down';
+    redis: 'up' | 'down';
+    twilio: 'up' | 'down';
+    vertexAI: 'up' | 'down';
+  };
 }
 
-const QUEUE_NAMES = [
-  'lead-intake', 'ai-response', 'qualification', 'lead-routing',
-  'appointment-booking', 'crm-sync', 'missed-call', 'reactivation',
-  'notification', 'analytics-ingest', 'audit-log', 'retention',
-];
+async function fetchHealth(): Promise<PlatformHealth> {
+  const res = await fetch(`${API}/admin/health`, {
+    headers: { Authorization: `Bearer ${ADMIN_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Failed: ${res.status}`);
+  return res.json() as Promise<PlatformHealth>;
+}
 
-function statusColor(status: 'healthy' | 'degraded' | 'down'): string {
-  if (status === 'healthy') return 'var(--green)';
-  if (status === 'degraded') return 'var(--amber)';
+function statusColor(s: 'up' | 'down' | 'healthy' | 'degraded'): string {
+  if (s === 'up' || s === 'healthy') return 'var(--green)';
+  if (s === 'degraded') return 'var(--amber)';
   return 'var(--red)';
 }
 
-function MetricCard({ label, value, unit, warn }: { label: string; value: number; unit: string; warn?: boolean }) {
-  return (
-    <div className="card">
-      <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: warn ? 'var(--amber)' : 'var(--text)' }}>
-        {value.toLocaleString()}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{unit}</div>
-    </div>
-  );
+function statusBg(s: 'up' | 'down' | 'healthy' | 'degraded'): string {
+  if (s === 'up' || s === 'healthy') return 'var(--green-dim)';
+  if (s === 'degraded') return 'var(--amber-dim)';
+  return 'var(--red-dim)';
 }
 
 export default function HealthPage() {
-  const [health, setHealth] = useState<HealthData | null>(null);
-  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const [health, setHealth] = useState<PlatformHealth | null>(null);
+  const [error, setError] = useState('');
+  const [lastFetch, setLastFetch] = useState('');
 
-  const fetchHealth = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/admin/health`, {
-        headers: { 'x-admin-api-key': ADMIN_KEY },
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json() as HealthData;
-        setHealth(data);
-        setLastFetch(new Date());
-      }
-    } catch {
-      // health endpoint may not be available
+      const data = await fetchHealth();
+      setHealth(data);
+      setLastFetch(new Date().toLocaleTimeString());
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load health data');
     }
   }, []);
 
   useEffect(() => {
-    void fetchHealth();
-    const interval = setInterval(() => { void fetchHealth(); }, 30000);
+    void load();
+    const interval = setInterval(() => void load(), 30000);
     return () => clearInterval(interval);
-  }, [fetchHealth]);
+  }, [load]);
 
   return (
-    <div>
+    <div style={{ padding: 32, background: 'var(--bg)', minHeight: '100vh', fontFamily: 'DM Sans, sans-serif' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700 }}>Platform Health</h1>
-        <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-          Auto-refreshes every 30s{lastFetch ? ` · Last: ${lastFetch.toLocaleTimeString()}` : ''}
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Platform Health</h1>
+          <p style={{ color: 'var(--text-3)', fontSize: 13, margin: '4px 0 0' }}>Auto-refreshes every 30s · Last: {lastFetch || '—'}</p>
         </div>
+        {health && (
+          <div style={{ padding: '6px 16px', borderRadius: 8, background: statusBg(health.status), color: statusColor(health.status), fontSize: 13, fontWeight: 600 }}>
+            {health.status.toUpperCase()}
+          </div>
+        )}
       </div>
 
-      {health ? (
-        <>
-          <div style={{
-            background: health.status === 'healthy' ? 'rgba(71,255,142,0.08)' : health.status === 'degraded' ? 'rgba(255,179,71,0.08)' : 'rgba(255,71,71,0.08)',
-            border: `1px solid ${statusColor(health.status)}30`,
-            borderRadius: 12,
-            padding: '16px 24px',
-            marginBottom: 24,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}>
-            <span className={`status-dot ${health.status === 'healthy' ? 'green' : health.status === 'degraded' ? 'amber' : 'red'}`} />
-            <span style={{ fontWeight: 700, fontSize: 18, color: statusColor(health.status), textTransform: 'uppercase' }}>
-              {health.status}
-            </span>
-            <span style={{ color: 'var(--text-2)', fontSize: 13, marginLeft: 8 }}>
-              Platform is {health.status === 'healthy' ? 'operating normally' : health.status === 'degraded' ? 'experiencing degraded performance' : 'down or critically degraded'}
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
-            <MetricCard label="AI Latency p50" value={health.aiP50Ms} unit="milliseconds" />
-            <MetricCard label="AI Latency p95" value={health.aiP95Ms} unit="milliseconds" warn={health.aiP95Ms > 5000} />
-            <MetricCard label="Twilio SMS p95" value={health.twilioP95Ms} unit="milliseconds" warn={health.twilioP95Ms > 3000} />
-            <MetricCard label="Worst Queue Lag" value={health.worstQueueLag} unit="jobs waiting" warn={health.worstQueueLag > 100} />
-            <MetricCard label="CRM Success Rate" value={health.crmSuccessRate} unit="percent" warn={health.crmSuccessRate < 90} />
-          </div>
-        </>
-      ) : (
-        <div className="card" style={{ color: 'var(--text-3)', padding: 48, textAlign: 'center' }}>Loading health data...</div>
+      {error && (
+        <div style={{ padding: 16, borderRadius: 8, background: 'var(--red-dim)', color: 'var(--red)', marginBottom: 24 }}>
+          {error}
+        </div>
       )}
 
-      <div className="card">
-        <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Queue Status</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-          {QUEUE_NAMES.map((q) => (
-            <div key={q} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: 'var(--bg-3)', borderRadius: 8 }}>
-              <span className="status-dot green" />
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{q}</span>
+      {health && (
+        <>
+          {/* Services */}
+          <div style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 20, marginBottom: 24 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>Services</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+              {(Object.entries(health.services) as [string, 'up' | 'down'][]).map(([service, status]) => (
+                <div key={service} style={{ background: 'var(--bg-3)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)', textTransform: 'capitalize' }}>{service}</span>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(status) }} />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+
+          {/* Metrics */}
+          <div style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>24h Metrics</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+              {([
+                { label: 'AI Latency p95', value: `${health.metrics.aiLatencyP95Ms}ms` },
+                { label: 'Twilio Latency p95', value: `${health.metrics.twilioLatencyP95Ms}ms` },
+                { label: 'Queue Lag', value: `${health.metrics.queueLagMs}ms` },
+                { label: 'CRM Sync Rate', value: `${health.metrics.crmSyncSuccessRate}%` },
+                { label: 'Active Workspaces', value: health.metrics.activeWorkspaces },
+                { label: 'Leads (24h)', value: health.metrics.totalLeads24h },
+              ] as { label: string; value: string | number }[]).map(({ label, value }) => (
+                <div key={label} style={{ background: 'var(--bg-3)', borderRadius: 8, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {!health && !error && (
+        <div style={{ color: 'var(--text-3)', textAlign: 'center', marginTop: 64 }}>Loading health data…</div>
+      )}
     </div>
   );
 }

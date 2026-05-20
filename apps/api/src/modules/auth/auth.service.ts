@@ -1,141 +1,104 @@
 import { Injectable } from '@nestjs/common';
-import { Resend } from 'resend';
-import { PrismaService } from '../prisma/prisma.service';
-import { generateMagicLinkToken, verifyMagicLinkToken } from '@conversionops/auth';
-import { signToken } from '@conversionops/auth';
+import { generateMagicLinkToken, verifyMagicLinkToken, signToken } from '@conversionops/auth';
+import { ResendClient } from '@conversionops/integrations';
 import { logger } from '@conversionops/observability';
-import { Result } from '@conversionops/types';
-import type { User } from '@conversionops/db';
+import type { Result } from '@conversionops/types';
+import type { User, WorkspaceUser } from '@conversionops/db';
+import { PrismaService } from '../prisma/prisma.service';
 
-export interface VerifyResult {
+export interface AuthenticatedSession {
   jwt: string;
   user: Pick<User, 'id' | 'email' | 'name'>;
+  workspaceUser: WorkspaceUser;
 }
 
 @Injectable()
 export class AuthService {
-  private readonly resend: Resend;
+  private readonly resend: ResendClient;
 
   constructor(private readonly prisma: PrismaService) {
-    this.resend = new Resend(process.env['RESEND_API_KEY'] ?? '');
+    this.resend = new ResendClient(process.env['RESEND_API_KEY'] ?? '');
   }
 
   /**
-   * Sends a magic-link email to the given address. Creates the user if they don't exist yet.
-   * @param email - Recipient email address
-   * @returns Result<void> — never throws
+   * Generates and emails a magic link for the given email address.
+   * Never reveals whether an account exists (security invariant).
    */
   async sendMagicLink(email: string): Promise<Result<void>> {
-    try {
-      const secret = this.getMagicLinkSecret();
-      const token = generateMagicLinkToken(email, secret);
+    const secret = process.env['MAGIC_LINK_SECRET'];
+    if (!secret) return { ok: false, error: new Error('MAGIC_LINK_SECRET not configured') };
 
-      await this.prisma.user.upsert({
-        where: { email },
-        update: { magicLinkToken: token, magicLinkExpiresAt: new Date(Date.now() + 15 * 60 * 1000) },
-        create: {
-          email,
-          magicLinkToken: token,
-          magicLinkExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-        },
-      });
+    const token = generateMagicLinkToken(email, secret);
+    const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
 
-      const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
-      const magicUrl = `${appUrl}/auth/verify?token=${encodeURIComponent(token)}`;
-
-      const { error } = await this.resend.emails.send({
-        from: 'ConversionOps <noreply@conversionops.io>',
-        to: email,
-        subject: 'Your sign-in link',
-        html: `
-          <p>Click the link below to sign in. It expires in 15 minutes.</p>
-          <p><a href="${magicUrl}">Sign in to ConversionOps</a></p>
-          <p>If you didn't request this, you can safely ignore this email.</p>
-        `,
-      });
-
-      if (error) {
-        logger.error({ email, error }, 'Failed to send magic link email');
-        return { ok: false, error: new Error(error.message) };
-      }
-
-      logger.info({ email }, 'Magic link sent');
-      return { ok: true, value: undefined };
-    } catch (error) {
-      logger.error({ email, err: error }, 'sendMagicLink error');
-      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+    const emailResult = await this.resend.sendMagicLink(email, token, appUrl);
+    if (!emailResult.ok) {
+      logger.error({ err: emailResult.error, email }, 'Failed to send magic link email');
+      return emailResult;
     }
+
+    logger.info({ email }, 'Magic link sent');
+    return { ok: true, value: undefined };
   }
 
   /**
-   * Verifies a magic-link token, creates a JWT session, and invalidates the token.
-   * @param token - Token from the magic link URL query param
-   * @returns Result<{ jwt, user }> — never throws
+   * Verifies a magic link token, upserts the user, and returns a signed JWT.
+   * Returns err if token is invalid or expired.
    */
-  async verifyMagicLink(token: string): Promise<Result<VerifyResult>> {
-    try {
-      const secret = this.getMagicLinkSecret();
-      const verifyResult = verifyMagicLinkToken(token, secret);
-      if (!verifyResult.ok) {
-        return { ok: false, error: verifyResult.error };
-      }
-
-      const { email } = verifyResult.value;
-
-      const user = await this.prisma.user.findUnique({
-        where: { email },
-        select: { id: true, email: true, name: true, magicLinkToken: true, magicLinkExpiresAt: true, deletedAt: true },
-      });
-
-      if (!user || user.deletedAt) {
-        return { ok: false, error: new Error('User not found') };
-      }
-
-      if (user.magicLinkToken !== token) {
-        return { ok: false, error: new Error('Token already used or invalid') };
-      }
-
-      if (!user.magicLinkExpiresAt || user.magicLinkExpiresAt < new Date()) {
-        return { ok: false, error: new Error('Token expired') };
-      }
-
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          magicLinkToken: null,
-          magicLinkExpiresAt: null,
-          emailVerified: true,
-          lastLoginAt: new Date(),
-        },
-      });
-
-      const jwtSecret = this.getJwtSecret();
-      const jwtToken = signToken({ sub: user.id, email: user.email }, jwtSecret, '7d');
-
-      logger.info({ userId: user.id, email: user.email }, 'User authenticated via magic link');
-
-      return {
-        ok: true,
-        value: {
-          jwt: jwtToken,
-          user: { id: user.id, email: user.email, name: user.name },
-        },
-      };
-    } catch (error) {
-      logger.error({ err: error }, 'verifyMagicLink error');
-      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
-    }
-  }
-
-  private getMagicLinkSecret(): string {
+  async verifyMagicLink(token: string, workspaceSlug?: string): Promise<Result<AuthenticatedSession>> {
     const secret = process.env['MAGIC_LINK_SECRET'];
-    if (!secret) throw new Error('MAGIC_LINK_SECRET env var not set');
-    return secret;
+    if (!secret) return { ok: false, error: new Error('MAGIC_LINK_SECRET not configured') };
+
+    const verifyResult = verifyMagicLinkToken(token, secret);
+    if (!verifyResult.ok) {
+      logger.warn({ err: verifyResult.error }, 'Magic link verification failed');
+      return { ok: false, error: verifyResult.error };
+    }
+
+    const { email } = verifyResult.value;
+
+    const user = await this.prisma.user.upsert({
+      where: { email },
+      create: { email, emailVerified: true, lastLoginAt: new Date() },
+      update: { emailVerified: true, lastLoginAt: new Date() },
+    });
+
+    const workspaceUser = await this.findWorkspaceUser(user.id, workspaceSlug);
+    if (!workspaceUser) {
+      return { ok: false, error: new Error('No workspace access found for this account') };
+    }
+
+    const jwtSecret = process.env['JWT_SECRET'];
+    if (!jwtSecret) return { ok: false, error: new Error('JWT_SECRET not configured') };
+
+    const jwt = signToken(
+      { userId: user.id, workspaceId: workspaceUser.workspaceId, role: workspaceUser.role },
+      jwtSecret,
+      '7d',
+    );
+
+    return {
+      ok: true,
+      value: {
+        jwt,
+        user: { id: user.id, email: user.email, name: user.name },
+        workspaceUser,
+      },
+    };
   }
 
-  private getJwtSecret(): string {
-    const secret = process.env['JWT_SECRET'];
-    if (!secret) throw new Error('JWT_SECRET env var not set');
-    return secret;
+  private async findWorkspaceUser(userId: string, workspaceSlug?: string): Promise<WorkspaceUser | null> {
+    if (workspaceSlug) {
+      const workspace = await this.prisma.workspace.findUnique({ where: { slug: workspaceSlug } });
+      if (!workspace) return null;
+      return this.prisma.workspaceUser.findFirst({
+        where: { userId, workspaceId: workspace.id, isActive: true, deletedAt: null },
+      });
+    }
+
+    return this.prisma.workspaceUser.findFirst({
+      where: { userId, isActive: true, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

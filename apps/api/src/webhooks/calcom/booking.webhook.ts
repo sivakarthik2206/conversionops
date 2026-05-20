@@ -1,253 +1,137 @@
-﻿import {
-  Body, Controller, Headers, HttpCode, HttpStatus, Post,
-  RawBodyRequest, Req, UnauthorizedException, BadRequestException,
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common';
 import { createHmac } from 'crypto';
-import { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
-import { PrismaService } from '../../modules/prisma/prisma.service';
-import { IdempotencyService, queues } from '@conversionops/orchestration';
-import { parseCalComWebhook } from '@conversionops/integrations';
-import { TwilioClient } from '@conversionops/integrations';
+import { IdempotencyService } from '@conversionops/orchestration';
 import { IdempotencyConflictError } from '@conversionops/sdk-standards';
+import { parseCalComWebhook } from '@conversionops/integrations';
+import { queues } from '@conversionops/orchestration';
 import { logger } from '@conversionops/observability';
-import { CreateAppointmentHandler } from '../../modules/appointment/commands/create-appointment.handler';
-import { CreateAppointmentCommand } from '../../modules/appointment/commands/create-appointment.command';
-import { UpdateAppointmentHandler } from '../../modules/appointment/commands/update-appointment.handler';
-import { UpdateAppointmentCommand } from '../../modules/appointment/commands/update-appointment.command';
-import { NotificationType } from '@conversionops/db';
+import type { Prisma } from '@conversionops/db';
+import { PrismaService } from '../../modules/prisma/prisma.service';
 
 @Controller('webhooks/calcom')
 @Public()
 export class CalComWebhookController {
   private readonly idempotencyService: IdempotencyService;
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly createAppointmentHandler: CreateAppointmentHandler,
-    private readonly updateAppointmentHandler: UpdateAppointmentHandler,
-  ) {
+  constructor(private readonly prisma: PrismaService) {
     this.idempotencyService = new IdempotencyService(prisma);
   }
 
-  /**
-   * Handles Cal.com booking webhooks. Verifies HMAC signature before processing.
-   */
   @Post()
   @HttpCode(HttpStatus.OK)
-  async handleCalComWebhook(
-    @Body() body: unknown,
+  async handleBookingWebhook(
+    @Body() body: Record<string, unknown>,
     @Headers('x-cal-signature-256') signature: string,
-    @Req() req: RawBodyRequest<Request>,
   ): Promise<{ received: boolean }> {
-    const secret = process.env['CALCOM_WEBHOOK_SECRET'] ?? '';
-    const rawBody = (req.rawBody ?? Buffer.from(JSON.stringify(body))).toString('utf8');
+    const webhookSecret = process.env['CALCOM_WEBHOOK_SECRET'];
 
-    if (secret) {
-      const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-      if (signature !== expected) {
-        throw new UnauthorizedException('Invalid Cal.com webhook signature');
+    if (webhookSecret && signature) {
+      const expectedSig = createHmac('sha256', webhookSecret)
+        .update(JSON.stringify(body))
+        .digest('hex');
+      if (signature !== expectedSig) {
+        logger.warn('calcom-webhook: invalid signature');
+        throw new BadRequestException('Invalid webhook signature');
       }
     }
 
-    const parseResult = parseCalComWebhook(body);
-    if (!parseResult.ok) {
-      throw new BadRequestException(`Invalid webhook payload: ${parseResult.error.message}`);
+    let event: ReturnType<typeof parseCalComWebhook>;
+    try {
+      event = parseCalComWebhook(body);
+    } catch (err) {
+      logger.warn({ err }, 'calcom-webhook: failed to parse payload');
+      return { received: true };
     }
 
-    const { triggerEvent, payload } = parseResult.value;
-    const idempotencyKey = `calcom:${payload.uid}:${triggerEvent}`;
+    const bookingUid = String(body['uid'] ?? body['bookingId'] ?? '');
+    if (!bookingUid) {
+      return { received: true };
+    }
+
+    const idempotencyKey = `calcom:booking:${bookingUid}`;
 
     try {
       const cached = await this.idempotencyService.acquire(idempotencyKey, 'calcom');
-      if (cached !== null) return { received: true };
+      if (cached !== null) {
+        return { received: true };
+      }
     } catch (err) {
-      if (err instanceof IdempotencyConflictError) return { received: true };
-      logger.error({ err, uid: payload.uid }, 'calcom: idempotency acquire failed');
+      if (err instanceof IdempotencyConflictError) {
+        return { received: true };
+      }
     }
 
     try {
-      if (triggerEvent === 'BOOKING_CREATED') {
-        await this.handleBookingCreated(payload);
-      } else if (triggerEvent === 'BOOKING_CANCELLED') {
-        await this.handleBookingCancelled(payload);
-      } else if (triggerEvent === 'BOOKING_RESCHEDULED') {
-        await this.handleBookingRescheduled(payload);
-      }
-
-      await this.idempotencyService.complete(idempotencyKey, { processed: triggerEvent });
+      await this.processEvent(event, bookingUid);
+      await this.idempotencyService.complete(idempotencyKey, { processed: true });
     } catch (err) {
-      logger.error({ err, uid: payload.uid, triggerEvent }, 'calcom: webhook processing error');
-      try { await this.idempotencyService.fail(idempotencyKey); } catch { /* ignore */ }
+      await this.idempotencyService.fail(idempotencyKey).catch(() => undefined);
+      logger.error({ err, bookingUid }, 'calcom-webhook: processing failed');
     }
 
     return { received: true };
   }
 
-  private async handleBookingCreated(payload: { uid: string; startTime: string; endTime: string; attendees: Array<{ email: string; name?: string; timeZone?: string }>; organizer?: { email?: string }; responses?: { phone?: { value: string } } }): Promise<void> {
-    const organizerEmail = payload.organizer?.email;
-    const phone = payload.responses?.phone?.value ?? payload.attendees[0]?.email;
-    const attendeeTimezone = payload.attendees[0]?.timeZone ?? 'America/New_York';
-
-    const workspace = organizerEmail
-      ? await this.prisma.workspace.findFirst({
-          where: { ownerEmail: organizerEmail, deletedAt: null },
-        })
-      : null;
-
-    if (!workspace) {
-      logger.warn({ organizerEmail }, 'calcom: no workspace found for organizer, skipping');
+  private async processEvent(
+    eventResult: ReturnType<typeof parseCalComWebhook>,
+    bookingUid: string,
+  ): Promise<void> {
+    if (!eventResult.ok) {
+      logger.error({ err: eventResult.error }, 'calcom-webhook: invalid event payload');
       return;
     }
+    const event = eventResult.value;
 
-    const lead = phone
-      ? await this.prisma.lead.findFirst({
-          where: {
-            workspaceId: workspace.id,
-            OR: [
-              { phone },
-              { email: phone },
-            ],
-            deletedAt: null,
-          },
-        })
-      : null;
+    if (event.triggerEvent === 'BOOKING_CREATED') {
+      const attendeeEmail = event.payload.attendees[0]?.email;
+      if (!attendeeEmail) return;
 
-    const scheduledAt = new Date(payload.startTime);
-    const endAt = new Date(payload.endTime);
-    const durationMinutes = Math.round((endAt.getTime() - scheduledAt.getTime()) / 60000);
+      const lead = await this.prisma.lead.findFirst({
+        where: { email: attendeeEmail, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+      });
 
-    const result = await this.createAppointmentHandler.execute(
-      new CreateAppointmentCommand(
-        lead?.id ?? '',
-        workspace.id,
-        scheduledAt,
-        attendeeTimezone,
-        durationMinutes || 60,
-        undefined,
-        undefined,
-        undefined,
-        payload.uid,
-      ),
-    );
+      if (!lead) {
+        logger.warn({ attendeeEmail, bookingUid }, 'calcom-webhook: no lead found for attendee');
+        return;
+      }
 
-    if (!result.ok) {
-      logger.warn({ uid: payload.uid }, 'calcom: appointment creation failed');
-      return;
-    }
+      await this.prisma.appointment.create({
+        data: {
+          workspaceId: lead.workspaceId,
+          leadId: lead.id,
+          externalBookingId: bookingUid,
+          scheduledAt: new Date(event.payload.startTime),
+          durationMinutes: Math.round((new Date(event.payload.endTime).getTime() - new Date(event.payload.startTime).getTime()) / 60000),
+          timezone: event.payload.attendees[0]?.timeZone ?? 'UTC',
+          status: 'CONFIRMED',
+          externalPayload: event.payload as unknown as Prisma.InputJsonValue,
+        },
+      });
 
-    if (lead?.phone && workspace.twilioNumber) {
-      const aiConfig = workspace.aiConfig as Record<string, unknown>;
-      const agentName = typeof aiConfig['agentName'] === 'string' ? aiConfig['agentName'] : 'your agent';
-      const dateStr = scheduledAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      const timeStr = scheduledAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: attendeeTimezone });
-
-      const twilioClient = new TwilioClient(
-        process.env['TWILIO_ACCOUNT_SID'] ?? '',
-        process.env['TWILIO_AUTH_TOKEN'] ?? '',
-        workspace.twilioNumber,
+      await queues.aiResponse.add(
+        'appointment-confirmed-notify',
+        { leadId: lead.id, workspaceId: lead.workspaceId, bookingUid },
+        { removeOnComplete: 1000 },
       );
-      await twilioClient
-        .sendSMS({
-          to: lead.phone,
-          body: `Your appointment with ${agentName} is confirmed for ${dateStr} at ${timeStr}. We will send a reminder the day before.`,
-          workspaceId: workspace.id,
-          workspaceTimezone: workspace.timezone,
-        }, this.prisma)
-        .catch((err: unknown) => logger.error({ err }, 'calcom: confirmation SMS failed'));
-    }
 
-    await queues.notification
-      .add('appointment-booked-ws', {
-        workspaceId: workspace.id,
-        type: NotificationType.APPOINTMENT_BOOKED,
-        payload: { appointmentId: result.value.id, uid: payload.uid },
-        isOpsAlert: false,
-      }, { removeOnComplete: 500 })
-      .catch(() => undefined);
-  }
+      logger.info({ leadId: lead.id, workspaceId: lead.workspaceId, bookingUid }, 'calcom-webhook: appointment created');
+    } else if (event.triggerEvent === 'BOOKING_CANCELLED') {
+      await this.prisma.appointment.updateMany({
+        where: { externalBookingId: bookingUid },
+        data: { status: 'CANCELLED' },
+      });
 
-  private async handleBookingCancelled(payload: { uid: string; startTime: string }): Promise<void> {
-    const appointment = await this.prisma.appointment.findFirst({
-      where: { externalBookingId: payload.uid, deletedAt: null },
-      include: { lead: { select: { phone: true, workspaceId: true } }, workspace: { select: { twilioNumber: true, aiConfig: true, timezone: true } } },
-    });
-    if (!appointment) return;
-
-    await this.updateAppointmentHandler.execute(
-      new UpdateAppointmentCommand(
-        appointment.id,
-        appointment.workspaceId,
-        undefined,
-        'CANCELLED',
-        undefined,
-        undefined,
-        'Cancelled via Cal.com',
-      ),
-    );
-
-    await queues.notification
-      .add('appointment-cancelled', {
-        workspaceId: appointment.workspaceId,
-        type: NotificationType.APPOINTMENT_BOOKED,
-        payload: { appointmentId: appointment.id, cancelled: true },
-        isOpsAlert: false,
-      }, { removeOnComplete: 500 })
-      .catch(() => undefined);
-
-    if (appointment.lead?.phone && appointment.workspace?.twilioNumber) {
-      const twilioClient = new TwilioClient(
-        process.env['TWILIO_ACCOUNT_SID'] ?? '',
-        process.env['TWILIO_AUTH_TOKEN'] ?? '',
-        appointment.workspace.twilioNumber,
-      );
-      await twilioClient
-        .sendSMS({
-          to: appointment.lead.phone,
-          body: 'Your appointment has been cancelled. Reply to reschedule.',
-          workspaceId: appointment.workspaceId,
-          workspaceTimezone: appointment.workspace.timezone,
-        }, this.prisma)
-        .catch((err: unknown) => logger.error({ err }, 'calcom: cancellation SMS failed'));
-    }
-  }
-
-  private async handleBookingRescheduled(payload: { uid: string; startTime: string }): Promise<void> {
-    const appointment = await this.prisma.appointment.findFirst({
-      where: { externalBookingId: payload.uid, deletedAt: null },
-      include: { lead: { select: { phone: true } }, workspace: { select: { twilioNumber: true, aiConfig: true, timezone: true } } },
-    });
-    if (!appointment) return;
-
-    const newTime = new Date(payload.startTime);
-    await this.updateAppointmentHandler.execute(
-      new UpdateAppointmentCommand(
-        appointment.id,
-        appointment.workspaceId,
-        newTime,
-        'RESCHEDULED',
-      ),
-    );
-
-    if (appointment.lead?.phone && appointment.workspace?.twilioNumber) {
-      const aiConfig = appointment.workspace.aiConfig as Record<string, unknown>;
-      const agentName = typeof aiConfig['agentName'] === 'string' ? aiConfig['agentName'] : 'your agent';
-      const dateStr = newTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      const timeStr = newTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: appointment.timezone });
-
-      const twilioClient = new TwilioClient(
-        process.env['TWILIO_ACCOUNT_SID'] ?? '',
-        process.env['TWILIO_AUTH_TOKEN'] ?? '',
-        appointment.workspace.twilioNumber,
-      );
-      await twilioClient
-        .sendSMS({
-          to: appointment.lead.phone,
-          body: `Your appointment with ${agentName} has been rescheduled to ${dateStr} at ${timeStr}.`,
-          workspaceId: appointment.workspaceId,
-          workspaceTimezone: appointment.workspace.timezone,
-        }, this.prisma)
-        .catch((err: unknown) => logger.error({ err }, 'calcom: reschedule SMS failed'));
+      logger.info({ bookingUid }, 'calcom-webhook: appointment cancelled');
     }
   }
 }

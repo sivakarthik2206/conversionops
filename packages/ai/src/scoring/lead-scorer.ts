@@ -1,5 +1,5 @@
-import type { PrismaClient } from '@conversionops/db';
-import { LeadTier, Prisma } from '@conversionops/db';
+import type { PrismaClient, Prisma } from '@conversionops/db';
+import { LeadTier } from '@conversionops/db';
 import type { QualificationData } from '../prompts/qualification.prompt';
 
 export interface LeadScoreBreakdown {
@@ -8,84 +8,89 @@ export interface LeadScoreBreakdown {
   budget: number;
   urgency: number;
   engagement: number;
-  total: number;
 }
 
+const TIMELINE_SCORES: Record<string, number> = {
+  '30_days': 30,
+  '90_days': 20,
+  '6_months': 10,
+  browsing: 0,
+};
+
+const FINANCING_SCORES: Record<string, number> = {
+  pre_approved: 25,
+  cash: 25,
+  needs_financing: 10,
+  unknown: 0,
+};
+
+const URGENCY_SCORES: Record<string, number> = {
+  immediate: 15,
+  near_term: 8,
+  browsing: 0,
+};
+
 /**
- * Calculates a lead score from 0–100 based on qualification data.
- * Algorithm: timeline(30) + financing(25) + budget(20) + urgency(15) + engagement(10).
+ * Calculates a 0-100 lead score from qualification data.
+ * @returns Integer score 0-100
  */
 export function calculateScore(
   qualification: QualificationData,
-  messageCount = 0,
+  engagementScore = 0,
 ): number {
-  let timeline = 0;
-  switch (qualification.timeline) {
-    case '30_days':
-      timeline = 30;
-      break;
-    case '90_days':
-      timeline = 20;
-      break;
-    case '6_months':
-      timeline = 10;
-      break;
-    case 'browsing':
-      timeline = 0;
-      break;
-    default:
-      timeline = 0;
-  }
+  const timelineScore = TIMELINE_SCORES[qualification.timeline ?? ''] ?? 0;
+  const financingScore = FINANCING_SCORES[qualification.financing ?? ''] ?? 0;
 
-  let financing = 0;
-  switch (qualification.financing) {
-    case 'pre_approved':
-    case 'cash':
-      financing = 25;
-      break;
-    case 'needs_financing':
-      financing = 10;
-      break;
-    default:
-      financing = 0;
-  }
-
-  let budget = 0;
+  let budgetScore = 0;
   if (qualification.budget) {
-    const raw = qualification.budget.replace(/[^0-9]/g, '');
-    const amount = parseInt(raw, 10);
-    if (!isNaN(amount)) {
-      if (amount >= 500000) budget = 20;
-      else if (amount >= 300000) budget = 15;
-      else if (amount >= 100000) budget = 8;
-      else budget = 3;
-    } else {
-      budget = 5;
-    }
+    const amount = parseBudgetAmount(qualification.budget);
+    if (amount > 500000) budgetScore = 20;
+    else if (amount > 300000) budgetScore = 15;
+    else if (amount > 100000) budgetScore = 8;
+    else budgetScore = 3;
   }
 
-  let urgency = 0;
-  switch (qualification.urgency) {
-    case 'immediate':
-      urgency = 15;
-      break;
-    case 'near_term':
-      urgency = 8;
-      break;
-    case 'browsing':
-      urgency = 0;
-      break;
-    default:
-      urgency = 0;
-  }
+  const urgencyScore = URGENCY_SCORES[qualification.urgency ?? ''] ?? 0;
+  const engagementCapped = Math.min(engagementScore, 10);
 
-  const engagement = Math.min(10, Math.floor(messageCount / 2));
-
-  return Math.min(100, timeline + financing + budget + urgency + engagement);
+  return Math.min(
+    timelineScore + financingScore + budgetScore + urgencyScore + engagementCapped,
+    100,
+  );
 }
 
 /**
- * Maps a numeric score to a LeadTier.
+ * Returns the full score breakdown including tier and component scores.
+ */
+export function calculateScoreDetailed(
+  qualification: QualificationData,
+  engagementScore = 0,
+): { total: number; tier: LeadTier; breakdown: LeadScoreBreakdown } {
+  const timelineScore = TIMELINE_SCORES[qualification.timeline ?? ''] ?? 0;
+  const financingScore = FINANCING_SCORES[qualification.financing ?? ''] ?? 0;
+
+  let budgetScore = 0;
+  if (qualification.budget) {
+    const amount = parseBudgetAmount(qualification.budget);
+    if (amount > 500000) budgetScore = 20;
+    else if (amount > 300000) budgetScore = 15;
+    else if (amount > 100000) budgetScore = 8;
+    else budgetScore = 3;
+  }
+
+  const urgencyScore = URGENCY_SCORES[qualification.urgency ?? ''] ?? 0;
+  const engagementCapped = Math.min(engagementScore, 10);
+  const total = Math.min(timelineScore + financingScore + budgetScore + urgencyScore + engagementCapped, 100);
+
+  return {
+    total,
+    tier: getTier(total),
+    breakdown: { timeline: timelineScore, financing: financingScore, budget: budgetScore, urgency: urgencyScore, engagement: engagementCapped },
+  };
+}
+
+/**
+ * Returns the lead tier label for a numeric score.
  */
 export function getTier(score: number): LeadTier {
   if (score >= 80) return LeadTier.PRIORITY;
@@ -95,27 +100,35 @@ export function getTier(score: number): LeadTier {
 }
 
 /**
- * Updates the lead's score, tier, and qualification in the database.
+ * Persists updated lead score and tier to the database.
+ * Scoped to workspaceId — safe from cross-tenant writes.
  */
 export async function updateLeadScore(
   leadId: string,
   workspaceId: string,
   qualification: QualificationData,
+  engagementScore: number,
   prisma: PrismaClient,
 ): Promise<void> {
-  const messageCount = await prisma.message.count({
-    where: { conversationId: { in: (await prisma.conversation.findMany({ where: { leadId, workspaceId } })).map((c) => c.id) } },
-  });
+  const total = calculateScore(qualification, engagementScore);
+  const tier = getTier(total);
 
-  const score = calculateScore(qualification, messageCount);
-  const tier = getTier(score);
-
-  await prisma.lead.update({
-    where: { id: leadId },
+  await prisma.lead.updateMany({
+    where: { id: leadId, workspaceId },
     data: {
-      score,
+      score: total,
       tier,
-      qualification: qualification as Prisma.InputJsonValue,
+      qualification: qualification as unknown as Prisma.InputJsonValue,
     },
   });
+}
+
+function parseBudgetAmount(budget: string): number {
+  const cleaned = budget.replace(/[$,\s]/g, '').toLowerCase();
+  const kMatch = cleaned.match(/^([\d.]+)k$/);
+  if (kMatch) return parseFloat(kMatch[1] ?? '0') * 1000;
+  const mMatch = cleaned.match(/^([\d.]+)m(?:illion)?$/);
+  if (mMatch) return parseFloat(mMatch[1] ?? '0') * 1_000_000;
+  const plain = parseFloat(cleaned);
+  return isNaN(plain) ? 0 : plain;
 }

@@ -20,11 +20,13 @@ spec:
         - image: us-central1-docker.pkg.dev/PROJECT_ID/conversionops/worker:latest
           resources:
             limits:
-              memory: 512Mi
-              cpu: '2'
+              memory: 1Gi
+              cpu: '2000m'
           env:
             - name: NODE_ENV
               value: production
+            - name: CPU_ALWAYS_ALLOCATED
+              value: 'true'
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

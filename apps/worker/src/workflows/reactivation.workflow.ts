@@ -1,2 +1,1 @@
-// implement in build phases
-export {};
+export { ReactivationProcessor } from '../processors/reactivation.processor';

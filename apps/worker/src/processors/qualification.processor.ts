@@ -39,11 +39,11 @@ export class QualificationProcessor {
     }
 
     const messageCount = await this.prisma.message.count({
-      where: { conversationId },
+      where: { conversationId, workspaceId },
     });
 
     const qualification = (lead.qualification as QualificationData | null) ?? {};
-    await updateLeadScore(leadId, workspaceId, qualification, this.prisma);
+    await updateLeadScore(leadId, workspaceId, qualification, messageCount, this.prisma);
 
     const score = calculateScore(qualification, messageCount);
     const tier = getTier(score);
@@ -56,7 +56,7 @@ export class QualificationProcessor {
 
       if (newStatus !== lead.status) {
         await this.prisma.lead.update({
-          where: { id: leadId },
+          where: { id: leadId, workspaceId },
           data: { status: newStatus, qualification: qualification as Prisma.InputJsonValue },
         });
 

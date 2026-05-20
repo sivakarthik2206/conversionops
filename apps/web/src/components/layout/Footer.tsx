@@ -19,7 +19,7 @@ export default function Footer() {
             </Link>
           ))}
         </nav>
-        <p className="text-xs" style={{ color: 'var(--text-4)' }}>© 2025 ConversionOps. All rights reserved.</p>
+        <p className="text-xs" style={{ color: 'var(--text-4)' }}>Â© 2025 ConversionOps. All rights reserved.</p>
       </div>
     </footer>
   );

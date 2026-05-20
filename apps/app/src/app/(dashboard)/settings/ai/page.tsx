@@ -29,7 +29,7 @@ export default function AiSettingsPage() {
     }
   }, [workspace]);
 
-  const previewMessage = `Hi! I'm ${agentName || 'Alex'} with ${workspace?.name ?? 'our team'}. I saw you were interested in a property — are you looking to buy or sell? I can help right now!`;
+  const previewMessage = `Hi! I'm ${agentName || 'Alex'} with ${workspace?.name ?? 'our team'}. I saw you were interested in a property  are you looking to buy or sell? I can help right now!`;
 
   const save = async () => {
     setSaving(true);
@@ -73,7 +73,7 @@ export default function AiSettingsPage() {
           <div>
             <p className="text-[11px] uppercase tracking-widest font-medium mb-1" style={{ color: 'var(--text-3)' }}>Custom Instructions</p>
             <textarea value={customInstructions} onChange={e => setCustomInstructions(e.target.value.slice(0, 500))}
-              placeholder="Add any specific instructions for your AI agent…"
+              placeholder="Add any specific instructions for your AI agent"
               rows={4}
               className="w-full px-3 py-2 text-sm rounded-lg resize-none focus:outline-none focus:ring-1"
               style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text)', caretColor: 'var(--accent)' }} />

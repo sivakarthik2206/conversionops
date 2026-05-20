@@ -100,7 +100,7 @@ export default function LeadDetailPage() {
                   : <Circle size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--border-light)' }} />}
                 <div>
                   <p className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-3)' }}>{QUAL_LABELS[f]}</p>
-                  <p className="text-sm" style={{ color: qual[f] ? 'var(--text)' : 'var(--text-4)' }}>{qual[f] ?? '—'}</p>
+                  <p className="text-sm" style={{ color: qual[f] ? 'var(--text)' : 'var(--text-4)' }}>{qual[f] ?? ''}</p>
                 </div>
               </div>
             ))}

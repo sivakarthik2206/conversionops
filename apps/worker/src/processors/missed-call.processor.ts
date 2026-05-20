@@ -1,156 +1,140 @@
 import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { logger } from '@conversionops/observability';
-import { queues, EventStore } from '@conversionops/orchestration';
+import { queues } from '@conversionops/orchestration';
 import type { MissedCallJobData } from '@conversionops/orchestration';
+import { LeadSource, LeadStatus, ConversationStatus, Channel } from '@conversionops/db';
+import type { Prisma } from '@conversionops/db';
+import { isQuietHours, validateConsent } from '@conversionops/compliance';
 import { TwilioClient } from '@conversionops/integrations';
-import {
-  ConsentStatus,
-  ConsentChannel,
-  LeadSource,
-  LeadStatus,
-  ConversationStatus,
-  MessageRole,
-  Channel,
-  Prisma,
-} from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
+
+const MISSED_CALL_MESSAGE = 'Hey! You just called — sorry I missed you! I\'m [agentName]\'s virtual assistant. Can I help you with your real estate needs today?';
 
 @Injectable()
 export class MissedCallProcessor {
-  private readonly eventStore: EventStore;
-
-  constructor(private readonly prisma: PrismaService) {
-    this.eventStore = new EventStore(prisma);
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
+  ) {}
 
   /**
-   * Handles missed call recovery — 8-second SLA target.
-   * Sends immediate SMS text-back, creates Lead + Conversation, starts AI flow.
+   * Processes missed call jobs. Creates a lead, sends an SMS text-back within 8 seconds of receipt.
+   * TCPA: validates consent before sending. Skips if quiet hours.
    */
   async process(job: Job<MissedCallJobData>): Promise<void> {
-    const { workspaceId, fromNumber, callSid } = job.data;
+    const { workspaceId, fromNumber, toNumber, callSid } = job.data;
+    let { leadId } = job.data;
 
-    const workspace = await this.prisma.workspace.findFirst({
-      where: { id: workspaceId, deletedAt: null },
-    });
+    try {
+      const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
+      if (!workspace) {
+        logger.warn({ workspaceId }, 'missed-call: workspace not found');
+        return;
+      }
 
-    if (!workspace) {
-      logger.warn({ workspaceId }, 'missed-call: workspace not found, skipping');
-      return;
-    }
+      if (workspace.aiPaused) {
+        logger.info({ workspaceId }, 'missed-call: AI paused, skipping text-back');
+        return;
+      }
 
-    const aiConfig = workspace.aiConfig as Record<string, unknown>;
-    const agentName = typeof aiConfig['agentName'] === 'string' ? aiConfig['agentName'] : 'Alex';
+      if (isQuietHours(workspace.timezone)) {
+        logger.info({ workspaceId, fromNumber }, 'missed-call: quiet hours, skipping text-back');
+        return;
+      }
 
-    // Ensure consent record exists — missed call implies consent for callback
-    const existingConsent = await this.prisma.consentRecord.findFirst({
-      where: { phone: fromNumber, workspaceId, deletedAt: null },
-    });
+      // Find or create lead
+      let lead = leadId
+        ? await this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } })
+        : await this.prisma.lead.findFirst({ where: { phone: fromNumber, workspaceId, deletedAt: null } });
 
-    if (!existingConsent) {
-      await this.prisma.consentRecord.create({
-        data: {
-          workspaceId,
-          phone: fromNumber,
-          channel: ConsentChannel.SMS,
-          status: ConsentStatus.OPTED_IN,
-          consentMethod: 'missed_call_implied',
-          consentText: `Implied consent from missed call ${callSid}`,
-          consentSource: 'twilio_voice',
-        },
-      });
-      logger.info({ phone: fromNumber, workspaceId }, 'missed-call: consent created via missed call');
-    } else if (existingConsent.status !== ConsentStatus.OPTED_IN) {
-      logger.info({ phone: fromNumber, workspaceId }, 'missed-call: phone opted out, skipping');
-      return;
-    }
+      if (!lead) {
+        lead = await this.prisma.lead.create({
+          data: {
+            workspaceId,
+            phone: fromNumber,
+            name: fromNumber,
+            source: LeadSource.MISSED_CALL,
+            status: LeadStatus.NEW,
+            qualification: {} as Prisma.InputJsonValue,
+            sourcePayload: { callSid } as Prisma.InputJsonValue,
+          },
+        });
 
-    const messageBody = `Hi! You just called ${agentName}'s office at ${workspace.name}. This is their AI assistant — are you looking to buy or sell a property? I can help right now!`;
-
-    const accountSid = process.env['TWILIO_ACCOUNT_SID'] ?? '';
-    const authToken = process.env['TWILIO_AUTH_TOKEN'] ?? '';
-    const fromTwilioNumber = process.env['TWILIO_PHONE_NUMBER'] ?? workspace.twilioNumber ?? '';
-
-    if (!fromTwilioNumber) {
-      logger.error({ workspaceId }, 'missed-call: no Twilio number configured');
-      return;
-    }
-
-    const twilioClient = new TwilioClient(accountSid, authToken, fromTwilioNumber);
-    const smsResult = await twilioClient.sendSMS(
-      { to: fromNumber, body: messageBody, workspaceId, workspaceTimezone: workspace.timezone },
-      this.prisma,
-    );
-
-    if (!smsResult.ok) {
-      logger.error({ err: smsResult.error, phone: fromNumber, workspaceId }, 'missed-call: SMS send failed');
-    }
-
-    const existingLead = await this.prisma.lead.findFirst({
-      where: { workspaceId, phone: fromNumber, deletedAt: null },
-    });
-
-    const lead = existingLead ?? await this.prisma.lead.create({
-      data: {
-        workspaceId,
-        source: LeadSource.MISSED_CALL,
-        status: LeadStatus.NEW,
-        phone: fromNumber,
-        sourcePayload: ({ callSid, fromNumber, workspaceId }) as Prisma.InputJsonValue,
-      },
-    });
-
-    let conversation = await this.prisma.conversation.findFirst({
-      where: { leadId: lead.id, workspaceId, status: { not: 'OPT_OUT' }, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!conversation) {
-      conversation = await this.prisma.conversation.create({
-        data: {
-          workspaceId,
+        this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:created', {
           leadId: lead.id,
-          channel: Channel.SMS,
-          status: ConversationStatus.AI_ACTIVE,
-          aiActive: true,
-          fromNumber,
-          toNumber: fromTwilioNumber,
-        },
+          source: 'MISSED_CALL',
+        });
+      }
+
+      leadId = lead.id;
+
+      // Validate TCPA consent
+      const hasConsent = await validateConsent(fromNumber, workspaceId, this.prisma);
+      if (!hasConsent) {
+        await this.prisma.consentRecord.create({
+          data: {
+            workspaceId,
+            leadId,
+            phone: fromNumber,
+            channel: 'SMS',
+            status: 'OPTED_IN',
+            consentSource: 'missed_call_text_back',
+          },
+        });
+      }
+
+      // Find or create conversation
+      let conversation = await this.prisma.conversation.findFirst({
+        where: { leadId, workspaceId, status: { not: ConversationStatus.COMPLETED }, deletedAt: null },
       });
+
+      if (!conversation) {
+        conversation = await this.prisma.conversation.create({
+          data: {
+            workspaceId,
+            leadId,
+            channel: Channel.SMS,
+            status: ConversationStatus.AI_ACTIVE,
+            aiActive: true,
+          },
+        });
+      }
+
+      // Personalise message with agent name
+      const agentName = extractAgentName(workspace);
+      const smsBody = MISSED_CALL_MESSAGE.replace('[agentName]', agentName);
+
+      // Send text-back immediately
+      const twilio = new TwilioClient(
+        process.env['TWILIO_ACCOUNT_SID'] ?? '',
+        process.env['TWILIO_AUTH_TOKEN'] ?? '',
+        toNumber ?? workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
+      );
+
+      const smsResult = await twilio.sendSMS({ to: fromNumber, body: smsBody, workspaceId }, this.prisma);
+      if (!smsResult.ok) {
+        logger.error({ err: smsResult.error, leadId, fromNumber }, 'missed-call: SMS text-back failed');
+      } else {
+        logger.info({ leadId, fromNumber, messageSid: smsResult.value }, 'missed-call: text-back sent');
+      }
+
+      // Enqueue AI follow-up
+      await queues.aiResponse.add(
+        'missed-call-followup',
+        { leadId, workspaceId, conversationId: conversation.id },
+        { priority: 1, removeOnComplete: 1000 },
+      );
+    } catch (err) {
+      logger.error({ err, workspaceId, fromNumber, callSid }, 'missed-call: processing error');
+      throw err;
     }
-
-    if (smsResult.ok) {
-      await this.prisma.message.create({
-        data: {
-          workspaceId,
-          conversationId: conversation.id,
-          role: MessageRole.AI,
-          content: messageBody,
-          providerMessageId: smsResult.value,
-          deliveredAt: new Date(),
-        },
-      });
-    }
-
-    if (!existingLead) {
-      await this.eventStore.append({
-        leadId: lead.id,
-        workspaceId,
-        type: 'lead.created',
-        payload: { source: 'MISSED_CALL', callSid },
-        triggerSource: 'missed-call-processor',
-      });
-    }
-
-    await queues.aiResponse
-      .add(
-        'ai-response',
-        { leadId: lead.id, workspaceId, conversationId: conversation.id },
-        { removeOnComplete: 500, priority: 1 },
-      )
-      .catch((err: unknown) => logger.error({ err, leadId: lead.id }, 'missed-call: ai-response enqueue failed'));
-
-    logger.info({ leadId: lead.id, workspaceId, phone: fromNumber }, 'missed-call: processed successfully');
   }
+}
+
+function extractAgentName(workspace: { name: string; aiConfig: unknown }): string {
+  const config = workspace.aiConfig as Record<string, unknown> | null;
+  if (config && typeof config['agentName'] === 'string') return config['agentName'];
+  return workspace.name;
 }

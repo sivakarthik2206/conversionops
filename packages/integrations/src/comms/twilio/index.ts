@@ -1,7 +1,7 @@
 import twilio from 'twilio';
-import { validateRequest } from 'twilio/lib/webhooks/webhooks';
-import { PrismaClient } from '@conversionops/db';
-import { validateConsent, isQuietHours } from '@conversionops/compliance';
+import type { Twilio } from 'twilio';
+import type { PrismaClient } from '@conversionops/db';
+import { ConsentChannel, ConsentStatus } from '@conversionops/db';
 import { TCPAViolationError, ExternalServiceError } from '@conversionops/sdk-standards';
 import type { Result } from '@conversionops/types';
 
@@ -9,65 +9,54 @@ export interface SendSMSOptions {
   to: string;
   body: string;
   workspaceId: string;
-  workspaceTimezone?: string;
-}
-
-export interface ProvisionedNumber {
-  number: string;
-  sid: string;
 }
 
 export class TwilioClient {
-  private readonly client: ReturnType<typeof twilio>;
+  private readonly client: Twilio;
+  private readonly fromNumber: string;
 
-  constructor(
-    private readonly accountSid: string,
-    private readonly authToken: string,
-    private readonly fromNumber: string,
-  ) {
+  constructor(accountSid: string, authToken: string, fromNumber: string) {
     this.client = twilio(accountSid, authToken);
+    this.fromNumber = fromNumber;
   }
 
   /**
-   * Sends an SMS after TCPA validation. Throws TCPAViolationError if consent
-   * is missing or quiet hours are active. Never call without going through these checks.
-   * @returns Result<string> with messageSid on success
+   * Sends an SMS message. Performs TCPA consent check when prisma is provided.
+   * @returns Result<messageSid> — never throws
    */
-  async sendSMS(options: SendSMSOptions, prisma: PrismaClient): Promise<Result<string>> {
-    const hasConsent = await validateConsent(options.to, options.workspaceId, prisma);
-    if (!hasConsent) {
-      throw new TCPAViolationError(options.to, 'no_consent');
-    }
+  async sendSMS(options: SendSMSOptions, prisma?: PrismaClient): Promise<Result<string>> {
+    const { to, body, workspaceId } = options;
 
-    const timezone = options.workspaceTimezone ?? 'America/New_York';
-    if (isQuietHours(timezone)) {
-      throw new TCPAViolationError(options.to, 'quiet_hours');
+    if (prisma) {
+      const consentRecord = await prisma.consentRecord.findFirst({
+        where: { phone: to, workspaceId, channel: ConsentChannel.SMS, status: ConsentStatus.OPTED_IN },
+      });
+      if (!consentRecord) {
+        return {
+          ok: false,
+          error: new TCPAViolationError(to, 'No OPTED_IN consent record found'),
+        };
+      }
     }
 
     try {
       const message = await this.client.messages.create({
-        to: options.to,
+        to,
         from: this.fromNumber,
-        body: options.body,
+        body,
       });
       return { ok: true, value: message.sid };
-    } catch (err) {
+    } catch (error) {
       return {
         ok: false,
-        error: new ExternalServiceError(
-          'twilio',
-          `SMS send failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        error: new ExternalServiceError('Twilio', error instanceof Error ? error.message : String(error)),
       };
     }
   }
 
   /**
-   * Validates that a webhook request originated from Twilio.
-   * @param signature - X-Twilio-Signature header value
-   * @param url - The full webhook URL including query string
-   * @param params - POST body params sent by Twilio
-   * @param authToken - Twilio auth token for this workspace
+   * Validates a Twilio webhook request signature.
+   * Must be called before processing any webhook payload.
    */
   validateWebhookSignature(
     signature: string,
@@ -75,48 +64,33 @@ export class TwilioClient {
     params: Record<string, string>,
     authToken: string,
   ): boolean {
-    try {
-      return validateRequest(authToken, signature, url, params);
-    } catch {
-      return false;
-    }
+    return twilio.validateRequest(authToken, signature, url, params);
   }
 
   /**
-   * Provisions a new Twilio phone number in the given area code.
-   * @param areaCode - 3-digit US area code
-   * @returns Result<ProvisionedNumber>
+   * Provisions a new phone number in the given area code.
+   * @returns Result<{ number, sid }>
    */
-  async provisionPhoneNumber(areaCode: string): Promise<Result<ProvisionedNumber>> {
+  async provisionPhoneNumber(areaCode: string): Promise<Result<{ number: string; sid: string }>> {
     try {
-      const available = await this.client
-        .availablePhoneNumbers('US')
-        .local.list({ areaCode: parseInt(areaCode, 10), limit: 1 });
+      const available = await this.client.availablePhoneNumbers('US').local.list({
+        areaCode: parseInt(areaCode, 10),
+        limit: 1,
+      });
 
-      if (available.length === 0) {
-        return {
-          ok: false,
-          error: new ExternalServiceError('twilio', `No numbers available in area code ${areaCode}`),
-        };
+      if (!available[0]) {
+        return { ok: false, error: new ExternalServiceError('Twilio', `No numbers available in area code ${areaCode}`) };
       }
 
-      const phoneNumber = available[0]?.phoneNumber;
-      if (!phoneNumber) {
-        return {
-          ok: false,
-          error: new ExternalServiceError('twilio', 'Phone number search returned empty result'),
-        };
-      }
+      const purchased = await this.client.incomingPhoneNumbers.create({
+        phoneNumber: available[0].phoneNumber,
+      });
 
-      const purchased = await this.client.incomingPhoneNumbers.create({ phoneNumber });
       return { ok: true, value: { number: purchased.phoneNumber, sid: purchased.sid } };
-    } catch (err) {
+    } catch (error) {
       return {
         ok: false,
-        error: new ExternalServiceError(
-          'twilio',
-          `Number provisioning failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        error: new ExternalServiceError('Twilio', error instanceof Error ? error.message : String(error)),
       };
     }
   }

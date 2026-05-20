@@ -20,7 +20,7 @@ export default function ConnectCRMPage() {
       <h1 className="font-display text-[32px] mb-2" style={{ color: 'var(--text)' }}>Connect Follow Up Boss</h1>
       <p className="text-sm mb-8" style={{ color: 'var(--text-2)' }}>Sync qualified leads and conversation transcripts to your CRM automatically.</p>
       <div className="flex flex-col gap-4 mb-6">
-        <Input label="Follow Up Boss API Key" placeholder="fub_live_…" value={apiKey} onChange={e => setApiKey(e.target.value)} type="password" />
+        <Input label="Follow Up Boss API Key" placeholder="fub_live_" value={apiKey} onChange={e => setApiKey(e.target.value)} type="password" />
         {connected && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--green-dim)' }}>
             <Check size={14} style={{ color: 'var(--green)' }} />

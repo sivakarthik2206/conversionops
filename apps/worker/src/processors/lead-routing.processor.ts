@@ -68,7 +68,7 @@ export class LeadRoutingProcessor {
     });
 
     await this.prisma.lead.update({
-      where: { id: leadId },
+      where: { id: leadId, workspaceId },
       data: { assignedWorkspaceUserId: candidate.workspaceUserId },
     });
 
@@ -76,7 +76,7 @@ export class LeadRoutingProcessor {
 
     if (newStatus !== lead.status) {
       await this.prisma.lead.update({
-        where: { id: leadId },
+        where: { id: leadId, workspaceId },
         data: { status: newStatus },
       });
     }

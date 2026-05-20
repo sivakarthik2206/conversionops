@@ -1,52 +1,65 @@
-import { UserRole } from "./roles";
+import { UserRole } from './roles';
 
 export type Permission =
-  | "lead:read" | "lead:write" | "lead:assign"
-  | "conversation:read" | "conversation:write" | "conversation:takeover"
-  | "workspace:read" | "workspace:write" | "workspace:delete"
-  | "agent:read" | "agent:write" | "agent:suspend"
-  | "billing:read" | "billing:write"
-  | "analytics:read"
-  | "routing:read" | "routing:write"
-  | "audit:read"
-  | "ai:configure" | "ai:pause";
+  | 'lead:read'
+  | 'lead:write'
+  | 'conversation:read'
+  | 'conversation:write'
+  | 'conversation:takeover'
+  | 'analytics:read'
+  | 'agent:read'
+  | 'agent:write'
+  | 'agent:suspend'
+  | 'routing:read'
+  | 'routing:write'
+  | 'integrations:read'
+  | 'integrations:write'
+  | 'settings:read'
+  | 'settings:write'
+  | 'billing:read'
+  | 'billing:write'
+  | 'workspace:delete';
 
-export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.OWNER]: [
-    "lead:read", "lead:write", "lead:assign",
-    "conversation:read", "conversation:write", "conversation:takeover",
-    "workspace:read", "workspace:write", "workspace:delete",
-    "agent:read", "agent:write", "agent:suspend",
-    "billing:read", "billing:write",
-    "analytics:read",
-    "routing:read", "routing:write",
-    "audit:read",
-    "ai:configure", "ai:pause",
+    'lead:read', 'lead:write',
+    'conversation:read', 'conversation:write', 'conversation:takeover',
+    'analytics:read',
+    'agent:read', 'agent:write', 'agent:suspend',
+    'routing:read', 'routing:write',
+    'integrations:read', 'integrations:write',
+    'settings:read', 'settings:write',
+    'billing:read', 'billing:write',
+    'workspace:delete',
   ],
   [UserRole.ADMIN]: [
-    "lead:read", "lead:write", "lead:assign",
-    "conversation:read", "conversation:write", "conversation:takeover",
-    "workspace:read",
-    "agent:read", "agent:write",
-    "analytics:read",
-    "routing:read", "routing:write",
-    "audit:read",
-    "ai:configure", "ai:pause",
+    'lead:read', 'lead:write',
+    'conversation:read', 'conversation:write', 'conversation:takeover',
+    'analytics:read',
+    'agent:read', 'agent:write', 'agent:suspend',
+    'routing:read', 'routing:write',
+    'integrations:read', 'integrations:write',
+    'settings:read', 'settings:write',
   ],
   [UserRole.AGENT]: [
-    "lead:read",
-    "conversation:read", "conversation:write", "conversation:takeover",
-    "workspace:read",
-    "agent:read",
+    'lead:read', 'lead:write',
+    'conversation:read', 'conversation:write', 'conversation:takeover',
+    'analytics:read',
+    'agent:read',
+    'settings:read',
   ],
   [UserRole.VIEWER]: [
-    "lead:read",
-    "conversation:read",
-    "workspace:read",
-    "analytics:read",
+    'lead:read',
+    'conversation:read',
+    'analytics:read',
+    'agent:read',
+    'settings:read',
   ],
 };
 
+/**
+ * Returns true if the given role has the requested permission.
+ */
 export function hasPermission(role: UserRole, permission: Permission): boolean {
-  return ROLE_PERMISSIONS[role].includes(permission);
+  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }

@@ -1,6 +1,7 @@
+'use client';
 const FEATURES = [
   { num: '01', title: '60-Second Response', desc: 'Every Zillow, Realtor.com, missed call, and web form lead gets an AI response before a competitor can blink.' },
-  { num: '02', title: '7-Dimension Qualification', desc: 'Budget, timeline, financing, area, property type, urgency, and intent — gathered naturally over SMS, no forms.' },
+  { num: '02', title: '7-Dimension Qualification', desc: 'Budget, timeline, financing, area, property type, urgency, and intent â€” gathered naturally over SMS, no forms.' },
   { num: '03', title: 'TCPA Compliant', desc: 'Built-in opt-out detection, quiet hours enforcement, and consent management. Legal by default, not an afterthought.' },
   { num: '04', title: 'Smart Routing', desc: 'Language match, geography, availability, and performance-based assignment. The right lead to the right agent every time.' },
   { num: '05', title: 'Human Takeover in One Click', desc: 'Agent takes over any conversation instantly. AI steps back, you step in. Full conversation history preserved.' },

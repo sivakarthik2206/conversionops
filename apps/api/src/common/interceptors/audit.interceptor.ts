@@ -1,58 +1,57 @@
 import {
-  CallHandler,
-  ExecutionContext,
   Injectable,
   NestInterceptor,
+  ExecutionContext,
+  CallHandler,
 } from '@nestjs/common';
-import { Observable, tap } from 'rxjs';
+import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
 import { queues } from '@conversionops/orchestration';
 import { logger } from '@conversionops/observability';
 import type { AuthenticatedRequest } from '../guards/auth.guard';
 
+const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    if (!MUTATING_METHODS.has(request.method)) {
+      return next.handle();
+    }
+
+    const workspaceId = request.workspaceId;
+    const userId = request.user?.id;
 
     return next.handle().pipe(
-      tap({
-        next: (responseBody: unknown) => {
-          const userId = req.user?.id;
-          const workspaceId = req.workspaceId;
-          if (!userId || !workspaceId) return;
+      tap(() => {
+        if (!workspaceId || !userId) return;
 
-          let resourceId: string | undefined;
-          if (
-            responseBody !== null &&
-            typeof responseBody === 'object' &&
-            'id' in responseBody &&
-            typeof (responseBody as Record<string, unknown>)['id'] === 'string'
-          ) {
-            resourceId = (responseBody as Record<string, unknown>)['id'] as string;
-          }
+        const action = `${request.method.toLowerCase()}:${request.path.replace(/\/[a-z0-9]{20,}/gi, '/:id')}`;
 
-          if (!resourceId) return;
-
-          queues.auditLog
-            .add(
-              'resource-mutated',
-              {
-                userId,
-                workspaceId,
-                resourceId,
-                method: req.method,
-                path: req.path,
-              },
-              { removeOnComplete: 1000, removeOnFail: 500 },
-            )
-            .catch((err: unknown) => {
-              logger.error({ err }, 'AuditInterceptor: failed to enqueue');
-            });
-        },
-        error: () => {
-          // Audit failure never affects the response
-        },
+        queues.auditLog
+          .add(
+            'audit',
+            {
+              workspaceId,
+              actorId: userId,
+              action,
+              resourceType: resolveResourceType(request.path),
+              metadata: { method: request.method, path: request.path },
+            },
+            { removeOnComplete: 1000 },
+          )
+          .catch((err) => {
+            logger.error({ err, workspaceId, action }, 'Failed to enqueue audit log');
+          });
       }),
     );
   }
+}
+
+function resolveResourceType(path: string): string {
+  const segments = path.split('/').filter(Boolean);
+  const resource = segments[1];
+  return resource ?? 'unknown';
 }

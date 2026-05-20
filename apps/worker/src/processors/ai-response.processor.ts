@@ -2,180 +2,131 @@ import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { createHash } from 'crypto';
 import { logger } from '@conversionops/observability';
-import { queues, EventStore, transitionLead } from '@conversionops/orchestration';
+import { queues } from '@conversionops/orchestration';
 import type { AiResponseJobData } from '@conversionops/orchestration';
-import {
-  isOptOutKeyword,
-  processOptOut,
-  isQuietHours,
-  getNextAllowedTime,
-} from '@conversionops/compliance';
+import type { EvalJobData } from '@conversionops/ai';
+import { ConsentChannel, ConsentStatus, MessageRole, NotificationType } from '@conversionops/db';
+import type { Prisma } from '@conversionops/db';
+import { isQuietHours, isOptOutKeyword } from '@conversionops/compliance';
 import { checkFairHousing } from '@conversionops/compliance';
-import {
-  VertexAIClient,
-  runQualificationChain,
-  checkQuota,
-  trackUsage,
-  alertIfApproaching,
-} from '@conversionops/ai';
+import { VertexAIClient, runQualificationChain, checkQuota, trackUsage, runEvals } from '@conversionops/ai';
+import { NotificationService } from '@conversionops/orchestration';
 import { TwilioClient } from '@conversionops/integrations';
-import {
-  LeadStatus,
-  MessageRole,
-  NotificationType,
-  Prisma,
-} from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
 import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
-import { runEvals } from '@conversionops/ai';
+interface AIMessageMetadata {
+  promptVersion: string;
+  promptHash: string;
+  modelVersion: string;
+  chainVersion: string;
+  policyVersion: string;
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+  temperature: number;
+  tcpaChecked: boolean;
+  fairHousingChecked: boolean;
+  quietHoursApplied: boolean;
+  evalScores?: Record<string, number>;
+}
 
-const PROMPT_VERSION = 'qualification-v1.0.0';
-const CHAIN_VERSION = 'qualification-chain-v1.0.0';
+const PROMPT_VERSION = 'qualification-v2.3.1';
+const CHAIN_VERSION = 'qualification-chain-v1.2.0';
 const POLICY_VERSION = 'fair-housing-policy-v1.0.0';
 
 @Injectable()
 export class AiResponseProcessor {
-  private readonly eventStore: EventStore;
   private readonly vertexClient: VertexAIClient;
+  private readonly notificationService: NotificationService;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtimeEmitter: RealtimeEmitterService,
   ) {
-    this.eventStore = new EventStore(prisma);
     this.vertexClient = new VertexAIClient();
+    this.notificationService = new NotificationService(queues.notification);
   }
 
   /**
-   * Processes ai-response jobs. Full 7-step pre-send checklist before generating and sending.
-   * This is the core AI loop — TCPA, FHA, quota, and conversation logic all enforced here.
+   * 7-step AI response pipeline. Pre-send checklist enforces TCPA, quota, and FHA compliance.
+   * SMS is only sent after the message record is persisted.
    */
   async process(job: Job<AiResponseJobData>): Promise<void> {
     const { leadId, workspaceId, conversationId } = job.data;
-    const startMs = Date.now();
 
     const [lead, workspace, conversation] = await Promise.all([
       this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } }),
-      this.prisma.workspace.findFirst({ where: { id: workspaceId, deletedAt: null } }),
-      this.prisma.conversation.findFirst({
-        where: { id: conversationId, workspaceId, deletedAt: null },
-        include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
-      }),
+      this.prisma.workspace.findUnique({ where: { id: workspaceId } }),
+      this.prisma.conversation.findFirst({ where: { id: conversationId, workspaceId, deletedAt: null } }),
     ]);
 
     if (!lead || !workspace || !conversation) {
-      logger.warn({ leadId, workspaceId, conversationId }, 'ai-response: lead/workspace/conversation not found, skipping');
+      logger.warn({ leadId, workspaceId, conversationId }, 'ai-response: missing required records, skipping');
       return;
     }
 
-    // Step 1: Check if AI is allowed (human takeover or workspace pause)
-    if (!conversation.aiActive || workspace.aiPaused) {
-      logger.info({ conversationId, workspaceId }, 'ai-response: AI not allowed (paused or taken over), skipping');
+    // Step 1: Check AI is allowed
+    if (workspace.aiPaused) {
+      logger.info({ workspaceId, leadId }, 'ai-response: workspace AI paused, skipping');
+      return;
+    }
+    if (!conversation.aiActive) {
+      logger.info({ conversationId, leadId }, 'ai-response: conversation AI not active, skipping');
       return;
     }
 
-    // Step 2: Check latest inbound message for opt-out keyword
-    const latestMessage = conversation.messages[0];
-    if (latestMessage?.role === MessageRole.HUMAN) {
-      if (isOptOutKeyword(latestMessage.content)) {
-        await processOptOut(lead.phone ?? '', workspaceId, latestMessage.content, this.prisma);
-        await this.prisma.lead.update({
-          where: { id: leadId },
-          data: { status: LeadStatus.OPT_OUT },
-        });
-        await this.eventStore.append({
-          leadId,
-          workspaceId,
-          type: 'lead.opted-out',
-          payload: { keyword: latestMessage.content },
-          triggerSource: 'ai-response-processor',
-        });
-        logger.info({ leadId, workspaceId }, 'ai-response: opt-out detected, halting');
-        return;
-      }
+    // Step 2: Check opt-out keyword on last inbound message
+    const lastInbound = await this.prisma.message.findFirst({
+      where: { conversationId, workspaceId, role: MessageRole.HUMAN },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (lastInbound && isOptOutKeyword(lastInbound.content)) {
+      logger.info({ leadId, workspaceId }, 'ai-response: opt-out keyword detected');
+      return;
     }
 
-    // Step 3: Check quiet hours using workspace timezone
-    const timezone = workspace.timezone ?? 'America/New_York';
-    if (isQuietHours(timezone)) {
-      const nextAllowed = getNextAllowedTime(timezone);
-      const delayMs = Math.max(0, nextAllowed.getTime() - Date.now());
-      await queues.aiResponse.add(
-        'ai-response',
-        { leadId, workspaceId, conversationId },
-        { delay: delayMs, removeOnComplete: 500, priority: 2 },
-      );
-      logger.info({ leadId, workspaceId, nextAllowed }, 'ai-response: quiet hours active, rescheduled');
+    // Step 3: Check quiet hours (TCPA)
+    if (isQuietHours(workspace.timezone)) {
+      logger.info({ workspaceId, leadId, timezone: workspace.timezone }, 'ai-response: quiet hours');
       return;
     }
 
     // Step 4: Check token quota
-    const quota = await checkQuota(workspaceId, this.prisma);
-    if (!quota.allowed) {
-      const alertResult = await alertIfApproaching(workspaceId, quota.percentUsed, this.prisma);
-      if (alertResult.shouldAlert) {
-        await queues.notification
-          .add('quota-exhausted', {
-            workspaceId,
-            type: NotificationType.QUOTA_WARNING,
-            payload: { exhausted: true, workspaceId },
-            isOpsAlert: false,
-          }, { removeOnComplete: 1000, priority: 1 })
-          .catch(() => undefined);
-      }
-      logger.warn({ leadId, workspaceId, quota }, 'ai-response: quota exhausted, halting');
+    const quotaStatus = await checkQuota(workspaceId, this.prisma);
+    if (!quotaStatus.allowed) {
+      logger.warn({ workspaceId, leadId, used: quotaStatus.used }, 'ai-response: quota exceeded');
+      void this.notificationService.notifyWorkspace(workspaceId, NotificationType.QUOTA_WARNING, {
+        percentUsed: quotaStatus.percentUsed,
+      });
       return;
     }
 
-    await alertIfApproaching(workspaceId, quota.percentUsed, this.prisma);
-
-    // Steps 5-7: Generate, check FHA, send
-    const chainResult = await runQualificationChain(
-      conversationId,
-      workspace,
-      lead,
-      this.vertexClient,
-      this.prisma,
-    );
+    // Generate AI response
+    const startMs = Date.now();
+    const chainResult = await runQualificationChain(conversationId, workspace, lead, this.vertexClient, this.prisma);
 
     if (!chainResult.ok) {
-      logger.error({ err: chainResult.error, leadId, workspaceId }, 'ai-response: qualification chain failed');
+      logger.error({ err: chainResult.error, leadId, workspaceId }, 'ai-response: chain failed');
       return;
     }
 
-    const { content, updatedQualification, shouldBook, inputTokens, outputTokens, latencyMs } =
-      chainResult.value;
+    const { content, inputTokens, outputTokens, latencyMs } = chainResult.value;
 
-    // Step 6: Fair Housing check
+    // Step 5: Fair Housing check
     const fhaResult = checkFairHousing(content);
     if (!fhaResult.passed && fhaResult.severity === 'block') {
-      logger.warn({ leadId, workspaceId, flaggedPatterns: fhaResult.flaggedPatterns }, 'ai-response: FHA block, escalating');
-      await this.prisma.conversation.update({
-        where: { id: conversationId },
-        data: {
-          escalationLevel: 'ESCALATED',
-          escalationReason: `FHA policy block: ${fhaResult.flaggedPatterns.join(', ')}`,
-          escalatedAt: new Date(),
-          aiActive: false,
-          status: 'HUMAN_ACTIVE',
-        },
-      });
-      await queues.auditLog
-        .add('ai.fha_block', { workspaceId, action: 'ai.fha_block', resource: 'message', metadata: { flaggedPatterns: fhaResult.flaggedPatterns } }, { removeOnComplete: 1000 })
-        .catch(() => undefined);
+      logger.error({ leadId, flaggedPatterns: fhaResult.flaggedPatterns }, 'ai-response: FHA violation blocked');
       return;
     }
 
-    // Step 7a: Create Message record with complete AIMessageMetadata
-    const promptHash = createHash('sha256')
-      .update(`${PROMPT_VERSION}:${content}`)
-      .digest('hex')
-      .slice(0, 16);
+    const promptHash = createHash('sha256').update(content).digest('hex').slice(0, 16);
+    const modelVersion = process.env['VERTEX_AI_MODEL'] ?? 'gemini-1.5-flash-001';
 
-    const aiMetadata: Prisma.InputJsonValue = {
+    const aiMetadata: AIMessageMetadata = {
       promptVersion: PROMPT_VERSION,
       promptHash,
-      modelVersion: this.vertexClient.getModelId(),
+      modelVersion,
       chainVersion: CHAIN_VERSION,
       policyVersion: POLICY_VERSION,
       inputTokens,
@@ -185,107 +136,72 @@ export class AiResponseProcessor {
       tcpaChecked: true,
       fairHousingChecked: true,
       quietHoursApplied: false,
-      fhaPassed: fhaResult.passed,
-      fhaSeverity: fhaResult.severity,
     };
 
+    // Persist message BEFORE sending SMS
     const message = await this.prisma.message.create({
       data: {
-        workspaceId,
         conversationId,
+        workspaceId,
         role: MessageRole.AI,
         content,
-        aiMetadata,
+        aiMetadata: aiMetadata as unknown as Prisma.InputJsonValue,
       },
     });
 
-    // Step 7b: Send SMS via Twilio
-    const accountSid = process.env['TWILIO_ACCOUNT_SID'] ?? '';
-    const authToken = process.env['TWILIO_AUTH_TOKEN'] ?? '';
-    const fromNumber = process.env['TWILIO_PHONE_NUMBER'] ?? workspace.twilioNumber ?? '';
+    // Send SMS — only after message is persisted
+    if (lead.phone) {
+      const consentRecord = await this.prisma.consentRecord.findFirst({
+        where: { phone: lead.phone, workspaceId, channel: ConsentChannel.SMS, status: ConsentStatus.OPTED_IN },
+      });
 
-    if (lead.phone && fromNumber) {
-      const twilioClient = new TwilioClient(accountSid, authToken, fromNumber);
-      const smsResult = await twilioClient.sendSMS(
-        { to: lead.phone, body: content, workspaceId, workspaceTimezone: timezone },
-        this.prisma,
-      );
-
-      if (!smsResult.ok) {
-        logger.error({ err: smsResult.error, leadId, messageId: message.id }, 'ai-response: SMS send failed');
-        await this.prisma.message.update({
-          where: { id: message.id },
-          data: { failedAt: new Date(), failReason: smsResult.error.message },
-        });
+      if (consentRecord) {
+        const twilio = new TwilioClient(
+          process.env['TWILIO_ACCOUNT_SID'] ?? '',
+          process.env['TWILIO_AUTH_TOKEN'] ?? '',
+          workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
+        );
+        const smsResult = await twilio.sendSMS({ to: lead.phone, body: content, workspaceId });
+        if (!smsResult.ok) {
+          logger.error({ err: smsResult.error, leadId }, 'ai-response: SMS send failed');
+        } else {
+          await this.prisma.message.update({
+            where: { id: message.id, workspaceId },
+            data: { providerMessageId: smsResult.value, deliveredAt: new Date() },
+          });
+        }
       } else {
-        await this.prisma.message.update({
-          where: { id: message.id },
-          data: { providerMessageId: smsResult.value, deliveredAt: new Date() },
-        });
+        logger.warn({ leadId, phone: lead.phone }, 'ai-response: no consent, SMS not sent');
       }
     }
 
-    // Step 7c: Transition lead status via XState
-    const eventType = lead.status === LeadStatus.NEW ? 'CONTACT_MADE' : 'QUALIFICATION_STARTED';
-    const newStatus = transitionLead(lead.status, { type: eventType }, { leadId, workspaceId });
-    if (newStatus !== lead.status) {
-      await this.prisma.lead.update({ where: { id: leadId }, data: { status: newStatus } });
-    }
-
-    // Update qualification data
-    if (Object.keys(updatedQualification).length > 0) {
-      await this.prisma.lead.update({
-        where: { id: leadId },
-        data: { qualification: updatedQualification as Prisma.InputJsonValue },
-      });
-    }
-
-    // Step 7d: Append LeadEvent
-    const leadEventType =
-      lead.status === LeadStatus.NEW ? 'lead.contacted' : 'lead.qualification.progressed';
-    await this.eventStore.append({
-      leadId,
-      workspaceId,
-      type: leadEventType,
-      payload: { conversationId, messageId: message.id, shouldBook },
-      triggerSource: 'ai-response-processor',
-    });
-
-    // Step 7e: Track token usage
-    const totalTokens = inputTokens + outputTokens;
-    const costCents = Math.ceil((totalTokens / 1_000_000) * 7.5);
+    // Track token usage
     await trackUsage(
       workspaceId,
       leadId,
       message.id,
       { input: inputTokens, output: outputTokens },
       'qualification',
-      costCents,
+      0,
       this.prisma,
-    ).catch((err: unknown) => logger.error({ err }, 'ai-response: trackUsage failed'));
+    );
 
-    // Step 7f: Enqueue qualification job
-    await queues.qualification
-      .add('qualify', { leadId, workspaceId, conversationId }, { removeOnComplete: 500 })
-      .catch((err: unknown) => logger.error({ err, leadId }, 'ai-response: qualification enqueue failed'));
+    // Enqueue downstream jobs (non-blocking)
+    void queues.qualification.add('qualify', { leadId, workspaceId, conversationId }, { removeOnComplete: 1000 });
+    void queues.analyticsIngest.add('ai.latency', {
+      workspaceId,
+      event: 'ai.response.latency',
+      leadId,
+      metadata: { latencyMs: Date.now() - startMs },
+    }, { removeOnComplete: 1000 });
+    void queues.auditLog.add('ai-message', {
+      workspaceId,
+      action: 'ai.message.sent',
+      resourceId: message.id,
+      resourceType: 'message',
+    }, { removeOnComplete: 1000 });
 
-    // Step 7g: Enqueue analytics
-    await queues.analyticsIngest
-      .add('analytics-ingest', { leadId, workspaceId, event: leadEventType, metadata: { messageId: message.id } }, { removeOnComplete: 1000 })
-      .catch((err: unknown) => logger.error({ err, leadId }, 'ai-response: analytics enqueue failed'));
-
-    // Step 7h: Enqueue audit log
-    await queues.auditLog
-      .add('ai.message.sent', {
-        workspaceId,
-        action: 'ai.message.sent',
-        resource: 'message',
-        resourceId: message.id,
-        metadata: { leadId, conversationId, inputTokens, outputTokens },
-      }, { removeOnComplete: 1000 })
-      .catch((err: unknown) => logger.error({ err, leadId }, 'ai-response: audit enqueue failed'));
-
-    // Step 7i: Emit Socket.IO events
+    // Emit real-time event
     this.realtimeEmitter.emitToWorkspace(workspaceId, 'message:new', {
       conversationId,
       messageId: message.id,
@@ -293,36 +209,19 @@ export class AiResponseProcessor {
       content,
       createdAt: message.createdAt.toISOString(),
     });
-    this.realtimeEmitter.emitToConversation(conversationId, 'message:new', {
-      conversationId,
-      messageId: message.id,
-      role: 'AI',
-      content,
-      createdAt: message.createdAt.toISOString(),
-    });
 
-    if (Object.keys(updatedQualification).length > 0) {
-      const updatedLead = await this.prisma.lead.findFirst({
-        where: { id: leadId, workspaceId },
-        select: { score: true, tier: true },
-      });
-      if (updatedLead) {
-        this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:scored', {
-          leadId,
-          score: updatedLead.score,
-          tier: updatedLead.tier,
-        });
-      }
+    // Run evals async — never awaited
+    void this.scheduleEvals(message.id, workspaceId, leadId, conversationId);
+
+    logger.info({ leadId, workspaceId, messageId: message.id, latencyMs: Date.now() - startMs }, 'ai-response: complete');
+  }
+
+  private async scheduleEvals(messageId: string, workspaceId: string, leadId: string, conversationId: string): Promise<void> {
+    const evalData: EvalJobData = { messageId, workspaceId, leadId, conversationId };
+    try {
+      await runEvals(evalData, this.prisma, this.vertexClient);
+    } catch (err) {
+      logger.warn({ err, messageId }, 'ai-response: eval run failed (non-critical)');
     }
-
-    // Step 7j: Fire-and-forget AI evals — never awaited, never throws
-    void runEvals(
-      { messageId: message.id, workspaceId, leadId, conversationId },
-      this.prisma,
-      this.vertexClient,
-    );
-
-    const totalMs = Date.now() - startMs;
-    logger.info({ leadId, workspaceId, messageId: message.id, totalMs }, 'ai-response: completed');
   }
 }

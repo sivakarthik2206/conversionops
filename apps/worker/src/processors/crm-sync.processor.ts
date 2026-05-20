@@ -1,107 +1,96 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { logger } from '@conversionops/observability';
-import { EventStore } from '@conversionops/orchestration';
+import { queues } from '@conversionops/orchestration';
 import type { CrmSyncJobData } from '@conversionops/orchestration';
-import { syncLeadToFUB, ZapierWebhookRelay, FollowUpBossClient } from '@conversionops/integrations';
-import { withRetry } from '@conversionops/sdk-standards';
+import { syncLeadToFUB, ZapierWebhookRelay } from '@conversionops/integrations';
+import type { CRMEvent } from '@conversionops/integrations';
+import type { Lead, Workspace } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
+
+const MAX_RETRIES = 3;
 
 @Injectable()
 export class CrmSyncProcessor {
-  private readonly eventStore: EventStore;
-
-  constructor(private readonly prisma: PrismaService) {
-    this.eventStore = new EventStore(prisma);
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Syncs a qualified lead to CRM. Tries FUB first, falls back to Zapier.
-   * CRM failure never blocks the lead flow — always logs and completes the job.
+   * Syncs a lead to the configured CRM (Follow Up Boss or Zapier).
+   * Retries up to 3 times with exponential backoff.
+   * Never throws — all errors are logged.
    */
   async process(job: Job<CrmSyncJobData>): Promise<void> {
     const { leadId, workspaceId } = job.data;
 
-    const lead = await this.prisma.lead.findFirst({
-      where: { id: leadId, workspaceId, deletedAt: null },
-    });
-    if (!lead) {
-      logger.warn({ leadId, workspaceId }, 'crm-sync: lead not found, skipping');
-      return;
-    }
+    try {
+      const [lead, workspace] = await Promise.all([
+        this.prisma.lead.findFirst({
+          where: { id: leadId, workspaceId, deletedAt: null },
+        }),
+        this.prisma.workspace.findUnique({ where: { id: workspaceId } }),
+      ]);
 
-    const workspace = await this.prisma.workspace.findFirst({
-      where: { id: workspaceId, deletedAt: null },
-    });
-    if (!workspace) return;
-
-    const conversations = await this.prisma.conversation.findMany({
-      where: { leadId, workspaceId, deletedAt: null },
-      include: {
-        messages: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'asc' },
-          select: { role: true, content: true, createdAt: true },
-        },
-      },
-    });
-
-    const aiConfig = workspace.aiConfig as Record<string, unknown>;
-    const fubApiKey = typeof aiConfig['followUpBossApiKey'] === 'string' ? aiConfig['followUpBossApiKey'] : null;
-    const zapierUrl = typeof aiConfig['zapierWebhookUrl'] === 'string' ? aiConfig['zapierWebhookUrl'] : null;
-
-    let synced = false;
-
-    if (fubApiKey) {
-      try {
-        const client = new FollowUpBossClient(fubApiKey);
-        const result = await withRetry(
-          () => syncLeadToFUB(lead, conversations, workspace, this.prisma, client),
-          { attempts: 3, backoffMs: 1000 },
-        );
-
-        if (result.ok) {
-          synced = true;
-          await this.eventStore.append({
-            leadId, workspaceId, type: 'lead.crm.synced',
-            payload: { provider: 'follow-up-boss' }, triggerSource: 'crm-sync-processor',
-          });
-        } else {
-          logger.warn({ leadId, err: result.error }, 'crm-sync: FUB sync failed, trying Zapier fallback');
-        }
-      } catch (err: unknown) {
-        logger.error({ err, leadId }, 'crm-sync: FUB sync error');
+      if (!lead || !workspace) {
+        logger.warn({ leadId, workspaceId }, 'crm-sync: lead or workspace not found, skipping');
+        return;
       }
-    }
 
-    if (!synced && zapierUrl) {
-      try {
-        const relay = new ZapierWebhookRelay();
-        const event = lead.status === 'CONVERTED' ? 'lead.qualified' as const
-          : lead.assignedWorkspaceUserId ? 'lead.assigned' as const
-          : 'lead.created' as const;
+      const config = workspace.aiConfig as Record<string, unknown> | null;
+      const crmType = config?.['crmType'] as string | undefined;
+      const fubApiKey = config?.['fubApiKey'] as string | undefined;
+      const zapierWebhookUrl = config?.['zapierWebhookUrl'] as string | undefined;
 
-        const result = await relay.relayLead(zapierUrl, lead, event, conversations);
-        if (result.ok) {
-          synced = true;
-          await this.eventStore.append({
-            leadId, workspaceId, type: 'lead.crm.synced',
-            payload: { provider: 'zapier' }, triggerSource: 'crm-sync-processor',
-          });
-        } else {
-          logger.warn({ leadId, err: result.error }, 'crm-sync: Zapier relay failed');
-          await this.eventStore.append({
-            leadId, workspaceId, type: 'lead.crm.sync-failed',
-            payload: { error: result.error.message }, triggerSource: 'crm-sync-processor',
-          });
-        }
-      } catch (err: unknown) {
-        logger.error({ err, leadId }, 'crm-sync: Zapier error');
+      if (fubApiKey) {
+        await this.syncToFUB(lead, workspace, fubApiKey, job.attemptsMade);
+      } else if (zapierWebhookUrl) {
+        await this.syncToZapier(lead, workspace, zapierWebhookUrl);
+      } else {
+        logger.debug({ leadId, workspaceId, crmType }, 'crm-sync: no CRM configured, skipping');
       }
+    } catch (err) {
+      logger.error({ err, leadId, workspaceId, attempt: job.attemptsMade }, 'crm-sync: processing error');
+      if (job.attemptsMade < MAX_RETRIES) throw err;
     }
+  }
 
-    if (!synced && !fubApiKey && !zapierUrl) {
-      logger.info({ leadId, workspaceId }, 'crm-sync: no CRM configured for workspace');
+  private async syncToFUB(
+    lead: Lead,
+    workspace: Workspace,
+    apiKey: string,
+    attempt: number,
+  ): Promise<void> {
+    const result = await syncLeadToFUB(lead, workspace, apiKey, this.prisma);
+    if (!result.ok) {
+      logger.error(
+        { err: result.error, leadId: lead.id, attempt },
+        'crm-sync: Follow Up Boss sync failed',
+      );
+      if (attempt < MAX_RETRIES) throw result.error;
+    } else {
+      logger.info({ leadId: lead.id, fubContactId: result.value }, 'crm-sync: synced to FUB');
+
+      void queues.analyticsIngest.add('crm-sync', {
+        workspaceId: workspace.id,
+        event: 'crm.sync.result',
+        leadId: lead.id,
+        metadata: { success: true, crm: 'fub' },
+      }, { removeOnComplete: 1000 });
+    }
+  }
+
+  private async syncToZapier(
+    lead: Lead,
+    workspace: Workspace,
+    webhookUrl: string,
+  ): Promise<void> {
+    const relay = new ZapierWebhookRelay();
+    const event: CRMEvent = 'lead.qualified';
+
+    const result = await relay.relayLead(webhookUrl, lead, event);
+    if (!result.ok) {
+      logger.error({ err: result.error, leadId: lead.id }, 'crm-sync: Zapier relay failed');
+    } else {
+      logger.info({ leadId: lead.id, workspaceId: workspace.id }, 'crm-sync: synced to Zapier');
     }
   }
 }

@@ -1,154 +1,118 @@
 import {
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  OnGatewayInit,
-  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  SubscribeMessage,
+  OnGatewayInit,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { Redis } from 'ioredis';
+import Redis from 'ioredis';
 import { verifyToken } from '@conversionops/auth';
 import { logger } from '@conversionops/observability';
-import { PrismaService } from '../modules/prisma/prisma.service';
 import { WorkspaceRoomsService } from './workspace.rooms';
 
-interface AuthenticatedSocket extends Socket {
-  data: {
-    userId?: string;
-    workspaceId?: string;
-    role?: string;
-  };
-}
-
-interface JoinConversationData {
+interface JoinConversationPayload {
   conversationId: string;
+  workspaceId: string;
 }
 
 @WebSocketGateway({
   cors: {
-    origin: process.env['APP_URL'] ?? 'http://localhost:3000',
+    origin: process.env['CORS_ORIGIN']?.split(',') ?? ['http://localhost:3000'],
     credentials: true,
   },
-  namespace: '/',
+  transports: ['websocket', 'polling'],
 })
-export class RealtimeGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly workspaceRooms: WorkspaceRoomsService,
-  ) {}
+  constructor(private readonly rooms: WorkspaceRoomsService) {}
 
-  afterInit(server: Server): void {
-    this.workspaceRooms.setServer(server);
+  async afterInit(server: Server): Promise<void> {
+    this.rooms.setServer(server);
 
-    const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-    try {
-      const pubClient = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
-      const subClient = pubClient.duplicate();
-      server.adapter(createAdapter(pubClient, subClient));
-      logger.info('RealtimeGateway: Redis adapter configured');
-    } catch (err) {
-      logger.error({ err }, 'RealtimeGateway: failed to configure Redis adapter, falling back to in-memory');
+    const redisUrl = process.env['REDIS_URL'];
+    if (redisUrl) {
+      try {
+        const pubClient = new Redis(redisUrl);
+        const subClient = pubClient.duplicate();
+        server.adapter(createAdapter(pubClient, subClient));
+        logger.info('RealtimeGateway: Redis adapter initialised');
+      } catch (err) {
+        logger.error({ err }, 'RealtimeGateway: failed to initialise Redis adapter');
+      }
     }
   }
 
-  async handleConnection(client: AuthenticatedSocket): Promise<void> {
-    const token = client.handshake.auth['token'] as string | undefined;
-
+  handleConnection(client: Socket): void {
+    const token = extractToken(client);
     if (!token) {
-      client.emit('error', { message: 'Unauthorized: no token', code: 'UNAUTHORIZED' });
       client.disconnect(true);
       return;
     }
 
-    const jwtSecret = process.env['JWT_SECRET'] ?? '';
-    const tokenResult = verifyToken(token, jwtSecret);
-
-    if (!tokenResult.ok) {
-      client.emit('error', { message: 'Unauthorized: invalid token', code: 'UNAUTHORIZED' });
+    const secret = process.env['JWT_SECRET'];
+    if (!secret) {
       client.disconnect(true);
       return;
     }
 
-    const userId = tokenResult.value.sub;
-
-    const workspaceUser = await this.prisma.workspaceUser.findFirst({
-      where: { userId, isActive: true, deletedAt: null },
-      select: { workspaceId: true, role: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!workspaceUser) {
-      client.emit('error', { message: 'Unauthorized: no active workspace', code: 'UNAUTHORIZED' });
+    const result = verifyToken(token, secret);
+    if (!result.ok) {
+      logger.warn({ clientId: client.id }, 'WebSocket: invalid token — disconnecting');
       client.disconnect(true);
       return;
     }
 
-    client.data.userId = userId;
-    client.data.workspaceId = workspaceUser.workspaceId;
-    client.data.role = workspaceUser.role;
+    const { workspaceId } = result.value;
+    client.data['workspaceId'] = workspaceId;
 
-    try {
-      this.workspaceRooms.joinWorkspace(client, workspaceUser.workspaceId, workspaceUser.workspaceId);
-    } catch {
-      return;
-    }
-
-    logger.info(
-      { clientId: client.id, userId, workspaceId: workspaceUser.workspaceId },
-      'WebSocket: client connected',
-    );
+    this.rooms.joinWorkspace(client, workspaceId, workspaceId);
+    logger.info({ clientId: client.id, workspaceId }, 'WebSocket: client connected');
   }
 
-  handleDisconnect(client: AuthenticatedSocket): void {
-    if (client.data.workspaceId) {
-      this.workspaceRooms.leaveWorkspace(client, client.data.workspaceId);
-    }
-    logger.info(
-      { clientId: client.id, userId: client.data.userId },
-      'WebSocket: client disconnected',
-    );
+  handleDisconnect(client: Socket): void {
+    logger.info({ clientId: client.id }, 'WebSocket: client disconnected');
   }
 
   @SubscribeMessage('join:conversation')
-  async handleJoinConversation(
-    client: AuthenticatedSocket,
-    data: JoinConversationData,
-  ): Promise<void> {
-    if (!client.data.workspaceId) {
-      client.emit('error', { message: 'Unauthorized', code: 'UNAUTHORIZED' });
+  handleJoinConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: JoinConversationPayload,
+  ): void {
+    const clientWorkspaceId = client.data['workspaceId'] as string | undefined;
+    if (!clientWorkspaceId || clientWorkspaceId !== payload.workspaceId) {
+      client.emit('error', { message: 'Unauthorized: workspace mismatch', code: 'TENANT_LEAKAGE' });
       return;
     }
 
-    const conversation = await this.prisma.conversation.findFirst({
-      where: {
-        id: data.conversationId,
-        workspaceId: client.data.workspaceId,
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-
-    if (!conversation) {
-      client.emit('error', { message: 'Conversation not found', code: 'NOT_FOUND' });
-      return;
-    }
-
-    await client.join(this.workspaceRooms.getConversationRoom(data.conversationId));
-    client.emit('joined:conversation', { conversationId: data.conversationId });
+    void client.join(`conv:${payload.conversationId}`);
+    logger.debug(
+      { clientId: client.id, conversationId: payload.conversationId },
+      'WebSocket: joined conversation room',
+    );
   }
 
-  emitToWorkspace(workspaceId: string, event: string, data: unknown): void {
-    this.workspaceRooms.emitToWorkspace(workspaceId, event, data);
+  @SubscribeMessage('leave:conversation')
+  handleLeaveConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { conversationId: string },
+  ): void {
+    void client.leave(`conv:${payload.conversationId}`);
   }
+}
 
-  emitToConversation(conversationId: string, event: string, data: unknown): void {
-    this.workspaceRooms.emitToConversation(conversationId, event, data);
-  }
+function extractToken(client: Socket): string | null {
+  const auth = client.handshake.auth as Record<string, unknown>;
+  if (typeof auth['token'] === 'string') return auth['token'];
+
+  const query = client.handshake.query;
+  if (typeof query['token'] === 'string') return query['token'];
+
+  return null;
 }

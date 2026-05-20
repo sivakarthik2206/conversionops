@@ -1,7 +1,7 @@
 import Pricing from '@/components/sections/Pricing';
 
 export const metadata = {
-  title: 'Pricing — ConversionOps',
+  title: 'Pricing â€” ConversionOps',
   description: 'Simple, transparent pricing. No long-term contracts.',
 };
 

@@ -3,7 +3,8 @@ import { Job } from 'bullmq';
 import { logger } from '@conversionops/observability';
 import { queues, EventStore } from '@conversionops/orchestration';
 import type { LeadIntakeJobData } from '@conversionops/orchestration';
-import { LeadSource, LeadStatus, ConversationStatus, MessageRole, Channel, Prisma } from '@conversionops/db';
+import { LeadStatus, LeadSource, ConversationStatus, Channel, MessageRole } from '@conversionops/db';
+import type { Prisma } from '@conversionops/db';
 import { PrismaService } from '../modules/prisma/prisma.service';
 import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
@@ -19,177 +20,118 @@ export class LeadIntakeProcessor {
   }
 
   /**
-   * Processes lead-intake jobs. Handles both API-created leads and SMS-path leads.
-   * For SMS-path: creates/finds Lead + Conversation + inbound Message.
-   * Appends lead.created event and enqueues downstream jobs.
+   * Processes incoming lead intake jobs. Creates or updates lead + conversation,
+   * then enqueues the ai-response job.
    */
   async process(job: Job<LeadIntakeJobData>): Promise<void> {
-    const data = job.data;
-    const { workspaceId } = data;
+    const { workspaceId, from, to, body, messageSid, source, name, email, metadata } = job.data;
+    let { leadId } = job.data;
 
-    if (data.leadId) {
-      await this.processApiLead(data.leadId, workspaceId);
-      return;
-    }
-
-    if (data.from) {
-      await this.processSmsLead(data);
-      return;
-    }
-
-    logger.warn({ jobId: job.id }, 'lead-intake: no leadId or from phone, skipping');
-  }
-
-  private async processApiLead(leadId: string, workspaceId: string): Promise<void> {
-    const lead = await this.prisma.lead.findFirst({
-      where: { id: leadId, workspaceId, deletedAt: null },
-    });
-
-    if (!lead) {
-      logger.warn({ leadId, workspaceId }, 'lead-intake: lead not found, skipping');
-      return;
-    }
-
-    if (lead.externalId) {
-      const duplicate = await this.prisma.lead.findFirst({
-        where: { workspaceId, externalId: lead.externalId, deletedAt: null, NOT: { id: leadId } },
-      });
-      if (duplicate) {
-        logger.info({ leadId, externalId: lead.externalId }, 'lead-intake: duplicate externalId, skipping');
+    try {
+      const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
+      if (!workspace) {
+        logger.warn({ workspaceId }, 'lead-intake: workspace not found, skipping');
         return;
       }
-    }
 
-    const existingEvent = await this.prisma.leadEvent.findFirst({
-      where: { leadId, type: 'lead.created' },
-    });
-    if (!existingEvent) {
-      await this.eventStore.append({ leadId, workspaceId, type: 'lead.created', payload: { source: lead.source }, triggerSource: 'api' });
-    }
+      // Find or create lead by phone
+      let lead = leadId
+        ? await this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } })
+        : from
+          ? await this.prisma.lead.findFirst({ where: { phone: from, workspaceId, deletedAt: null } })
+          : null;
 
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { leadId, workspaceId, deletedAt: null },
-    });
+      const leadSource = resolveSource(source ?? metadata?.['source']);
 
-    if (conversation) {
-      await this.enqueueDownstream(leadId, workspaceId, conversation.id);
-    }
+      if (!lead) {
+        lead = await this.prisma.lead.create({
+          data: {
+            workspaceId,
+            phone: from ?? null,
+            email: email ?? null,
+            name: name ?? from ?? 'Unknown',
+            source: leadSource,
+            status: LeadStatus.NEW,
+            qualification: {} as Prisma.InputJsonValue,
+            sourcePayload: (metadata ?? {}) as Prisma.InputJsonValue,
+          },
+        });
 
-    await queues.analyticsIngest
-      .add('analytics-ingest', { leadId, workspaceId, event: 'lead.created' }, { removeOnComplete: 1000 })
-      .catch((err: unknown) => logger.error({ err, leadId }, 'lead-intake: analytics enqueue failed'));
-  }
+        await this.eventStore.append({
+          leadId: lead.id,
+          workspaceId,
+          type: 'lead.created',
+          payload: { source: leadSource, phone: from, email },
+          triggeredBy: 'system',
+        });
 
-  private async processSmsLead(data: LeadIntakeJobData): Promise<void> {
-    const { workspaceId, from: fromPhone, body: messageBody, messageSid, source } = data;
-    if (!fromPhone || !messageBody) return;
+        this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:created', {
+          leadId: lead.id,
+          source: leadSource,
+        });
 
-    const existingLead = await this.prisma.lead.findFirst({
-      where: { workspaceId, phone: fromPhone, deletedAt: null },
-    });
-
-    let leadId: string;
-    let isNew = false;
-
-    if (existingLead && data.externalId) {
-      const duplicate = await this.prisma.lead.findFirst({
-        where: { workspaceId, externalId: data.externalId, deletedAt: null },
-      });
-      if (duplicate) {
-        leadId = duplicate.id;
-      } else {
-        leadId = existingLead.id;
+        logger.info({ leadId: lead.id, workspaceId, source: leadSource }, 'lead-intake: new lead created');
       }
-    } else if (existingLead) {
-      leadId = existingLead.id;
-    } else {
-      const newLead = await this.prisma.lead.create({
-        data: {
-          workspaceId,
-          source: (source as LeadSource | undefined) ?? LeadSource.SMS_INBOUND,
-          status: LeadStatus.NEW,
-          phone: fromPhone,
-          name: data.name,
-          email: data.email,
-          externalId: data.externalId,
-          sourcePayload: (data.metadata ?? {}) as Prisma.InputJsonValue,
-        },
+
+      leadId = lead.id;
+
+      // Find or create conversation
+      let conversation = await this.prisma.conversation.findFirst({
+        where: { leadId, workspaceId, status: { not: ConversationStatus.COMPLETED }, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
       });
-      leadId = newLead.id;
-      isNew = true;
+
+      if (!conversation) {
+        conversation = await this.prisma.conversation.create({
+          data: {
+            workspaceId,
+            leadId,
+            channel: Channel.SMS,
+            status: ConversationStatus.AI_ACTIVE,
+            aiActive: true,
+          },
+        });
+      }
+
+      // Store inbound message if body is present
+      if (body) {
+        await this.prisma.message.create({
+          data: {
+            workspaceId,
+            conversationId: conversation.id,
+            role: MessageRole.HUMAN,
+            content: body,
+            providerMessageId: messageSid ?? null,
+          },
+        });
+      }
+
+      // Enqueue AI response
+      await queues.aiResponse.add(
+        'respond',
+        { leadId, workspaceId, conversationId: conversation.id },
+        { removeOnComplete: 1000, priority: 1 },
+      );
+
+      logger.info({ leadId, workspaceId, conversationId: conversation.id }, 'lead-intake: ai-response enqueued');
+    } catch (err) {
+      logger.error({ err, workspaceId, leadId }, 'lead-intake: processing error');
+      throw err;
     }
-
-    let conversation = await this.prisma.conversation.findFirst({
-      where: { leadId, workspaceId, status: { not: 'OPT_OUT' }, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!conversation) {
-      conversation = await this.prisma.conversation.create({
-        data: {
-          workspaceId,
-          leadId,
-          channel: Channel.SMS,
-          status: ConversationStatus.AI_ACTIVE,
-          aiActive: true,
-          fromNumber: fromPhone,
-          toNumber: data.to,
-        },
-      });
-    }
-
-    const existingMessage = messageSid
-      ? await this.prisma.message.findFirst({
-          where: { conversationId: conversation.id, providerMessageId: messageSid },
-        })
-      : null;
-
-    if (!existingMessage) {
-      await this.prisma.message.create({
-        data: {
-          workspaceId,
-          conversationId: conversation.id,
-          role: MessageRole.HUMAN,
-          content: messageBody,
-          providerMessageId: messageSid,
-          providerPayload: ({ From: fromPhone, Body: messageBody, MessageSid: messageSid }) as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    if (isNew) {
-      await this.eventStore.append({
-        leadId,
-        workspaceId,
-        type: 'lead.created',
-        payload: { source: source ?? 'SMS_INBOUND', phone: fromPhone },
-        triggerSource: 'twilio_sms',
-      });
-    }
-
-    await this.enqueueDownstream(leadId, workspaceId, conversation.id);
-
-    await queues.analyticsIngest
-      .add('analytics-ingest', { leadId, workspaceId, event: isNew ? 'lead.created' : 'lead.message_received' }, { removeOnComplete: 1000 })
-      .catch((err: unknown) => logger.error({ err, leadId }, 'lead-intake: analytics enqueue failed'));
-
-    this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:created', {
-      leadId,
-      source: source ?? 'SMS_INBOUND',
-      createdAt: new Date().toISOString(),
-      workspaceId,
-    });
-
-    logger.info({ leadId, workspaceId, conversationId: conversation.id }, 'lead-intake: SMS lead processed');
   }
+}
 
-  private async enqueueDownstream(leadId: string, workspaceId: string, conversationId: string): Promise<void> {
-    await queues.aiResponse
-      .add(
-        'ai-response',
-        { leadId, workspaceId, conversationId },
-        { removeOnComplete: 500, priority: 2 },
-      )
-      .catch((err: unknown) => logger.error({ err, leadId }, 'lead-intake: ai-response enqueue failed'));
-  }
+function resolveSource(source: unknown): LeadSource {
+  const s = String(source ?? '').toUpperCase();
+  const valid: Record<string, LeadSource> = {
+    ZILLOW: LeadSource.ZILLOW,
+    REALTOR_COM: LeadSource.REALTOR_COM,
+    WEB_FORM: LeadSource.WEB_FORM,
+    MISSED_CALL: LeadSource.MISSED_CALL,
+    SMS_INBOUND: LeadSource.SMS_INBOUND,
+    MANUAL: LeadSource.MANUAL,
+    REACTIVATION: LeadSource.REACTIVATION,
+    REFERRAL: LeadSource.REFERRAL,
+  };
+  return valid[s] ?? LeadSource.OTHER;
 }

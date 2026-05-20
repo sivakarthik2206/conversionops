@@ -1,85 +1,49 @@
 import { Injectable } from '@nestjs/common';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const StripeLib = require('stripe');
-import { queues } from '@conversionops/orchestration';
-import { logger } from '@conversionops/observability';
+import Stripe from 'stripe';
+import type { Subscription as StripeSubscription } from 'stripe/cjs/resources/Subscriptions.js';
+import type { Invoice as StripeInvoice } from 'stripe/cjs/resources/Invoices.js';
+import type { Customer as StripeCustomer } from 'stripe/cjs/resources/Customers.js';
+import type { Session as StripeCheckoutSession } from 'stripe/cjs/resources/Checkout/Sessions.js';
 import type { Result } from '@conversionops/types';
+import { logger } from '@conversionops/observability';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface StripeEventBase {
-  id: string;
-  type: string;
-  data: { object: Record<string, unknown> };
-}
-
-interface CheckoutSession {
-  metadata?: Record<string, string>;
-  subscription?: string | { id: string };
-  url?: string;
-}
-
-interface StripeSubscription {
-  id: string;
-  metadata?: Record<string, string>;
-  items: { data: Array<{ price?: { id: string } }> };
-}
-
-interface StripeInvoice {
-  customer?: string | { id?: string };
-}
-
 const PLAN_PRICE_MAP: Record<string, string> = {
-  SOLO: process.env['STRIPE_SOLO_PRICE_ID'] ?? '',
-  BROKERAGE: process.env['STRIPE_BROKERAGE_PRICE_ID'] ?? '',
-  ENTERPRISE: process.env['STRIPE_ENTERPRISE_PRICE_ID'] ?? '',
+  SOLO: 'price_solo',
+  BROKERAGE: 'price_brokerage',
 };
 
-function getPlanFromPriceId(priceId: string): string {
-  for (const [plan, pid] of Object.entries(PLAN_PRICE_MAP)) {
-    if (pid === priceId) return plan;
-  }
-  return 'SOLO';
-}
+export type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
 
 @Injectable()
 export class BillingService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private readonly stripe: Record<string, any>;
+  private readonly stripe: InstanceType<typeof Stripe>;
 
   constructor(private readonly prisma: PrismaService) {
-    // Using require() because stripe@22 exports via 'export =' pattern
-    const StripeConstructor = StripeLib.default ?? StripeLib;
-    this.stripe = new StripeConstructor(process.env['STRIPE_SECRET_KEY'] ?? '', {
-      apiVersion: '2026-04-22.dahlia',
-    });
+    const key = process.env['STRIPE_SECRET_KEY'];
+    if (!key) throw new Error('STRIPE_SECRET_KEY is required');
+    this.stripe = new Stripe(key, { apiVersion: '2026-04-22.dahlia' });
   }
 
   /**
-   * Creates a Stripe Checkout session for subscription purchase.
-   * Lazily creates a Stripe customer if one doesn't exist yet.
+   * Creates a Stripe Checkout session for the given workspace and price.
+   * Creates a Stripe customer if one does not exist.
+   * @returns Result<checkoutUrl>
    */
-  async createCheckoutSession(
-    workspaceId: string,
-    priceId: string,
-  ): Promise<Result<string>> {
+  async createCheckoutSession(workspaceId: string, priceId: string): Promise<Result<string>> {
     try {
-      const workspace = await this.prisma.workspace.findFirst({
-        where: { id: workspaceId, deletedAt: null },
-      });
-
-      if (!workspace) {
-        return { ok: false, error: new Error('Workspace not found') };
-      }
+      const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
+      if (!workspace) return { ok: false, error: new Error('Workspace not found') };
 
       let customerId = workspace.stripeCustomerId;
 
       if (!customerId) {
-        const customer = await this.stripe['customers'].create({
+        const customer = await this.stripe.customers.create({
           email: workspace.ownerEmail,
+          name: workspace.name,
           metadata: { workspaceId },
         });
-        customerId = (customer as { id: string }).id;
-
+        customerId = customer.id;
         await this.prisma.workspace.update({
           where: { id: workspaceId },
           data: { stripeCustomerId: customerId },
@@ -87,154 +51,165 @@ export class BillingService {
       }
 
       const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
-
-      const session = await this.stripe['checkout'].sessions.create({
-        mode: 'subscription',
+      const session = await this.stripe.checkout.sessions.create({
         customer: customerId,
+        payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
+        mode: 'subscription',
         success_url: `${appUrl}/settings/billing?success=true`,
         cancel_url: `${appUrl}/settings/billing?cancelled=true`,
         metadata: { workspaceId },
-      }) as CheckoutSession;
+      });
 
-      return { ok: true, value: session.url ?? '' };
-    } catch (err) {
-      logger.error({ err, workspaceId }, 'billing: createCheckoutSession failed');
-      return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
+      if (!session.url) return { ok: false, error: new Error('No checkout URL returned') };
+      return { ok: true, value: session.url };
+    } catch (error) {
+      logger.error({ err: error, workspaceId }, 'Billing: createCheckoutSession failed');
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
     }
   }
 
   /**
-   * Creates a Stripe Billing Portal session for subscription management.
+   * Creates a Stripe Customer Portal session for managing subscriptions.
+   * @returns Result<portalUrl>
    */
   async createPortalSession(workspaceId: string): Promise<Result<string>> {
     try {
-      const workspace = await this.prisma.workspace.findFirst({
-        where: { id: workspaceId, deletedAt: null },
-      });
-
+      const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
       if (!workspace?.stripeCustomerId) {
-        return { ok: false, error: new Error('No billing account found') };
+        return { ok: false, error: new Error('No Stripe customer found for workspace') };
       }
 
       const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
-
-      const session = await this.stripe['billingPortal'].sessions.create({
+      const session = await this.stripe.billingPortal.sessions.create({
         customer: workspace.stripeCustomerId,
         return_url: `${appUrl}/settings/billing`,
-      }) as { url: string };
+      });
 
       return { ok: true, value: session.url };
-    } catch (err) {
-      logger.error({ err, workspaceId }, 'billing: createPortalSession failed');
-      return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
+    } catch (error) {
+      logger.error({ err: error, workspaceId }, 'Billing: createPortalSession failed');
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
     }
   }
 
   /**
-   * Handles checkout.session.completed — activates subscription and sets plan.
+   * Returns current usage stats for the workspace.
    */
-  async handleSubscriptionCreated(event: StripeEventBase): Promise<void> {
-    const session = event.data.object as unknown as CheckoutSession;
-    const workspaceId = session.metadata?.['workspaceId'];
+  async getUsage(workspaceId: string): Promise<Result<{ used: number; limit: number; percentUsed: number }>> {
+    try {
+      const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
+      if (!workspace) return { ok: false, error: new Error('Workspace not found') };
 
+      const used = workspace.tokenUsageCurrentMonth;
+      const limit = workspace.tokenQuotaMonthly;
+      const percentUsed = limit > 0 ? Math.round((used / limit) * 100) : 0;
+
+      return { ok: true, value: { used, limit, percentUsed } };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+
+  /**
+   * Handles Stripe checkout.session.completed webhook.
+   * Extracts workspaceId from session metadata and activates the workspace.
+   */
+  async handleCheckoutCompleted(event: StripeEvent): Promise<void> {
+    const session = event.data.object as StripeCheckoutSession;
+    const workspaceId = (session.metadata as Record<string, string> | null)?.['workspaceId'];
     if (!workspaceId) {
-      logger.warn({ eventId: event.id }, 'billing: subscription.created missing workspaceId');
+      logger.warn({ sessionId: session.id }, 'Billing: no workspaceId in checkout session metadata');
       return;
     }
 
-    const subscriptionId = typeof session.subscription === 'string'
-      ? session.subscription
-      : (session.subscription as { id: string } | undefined)?.id;
+    const rawSub = session.subscription;
+    const subscriptionId = typeof rawSub === 'string'
+      ? rawSub
+      : (rawSub as StripeSubscription | null)?.id;
 
-    let plan = 'SOLO';
-
-    if (subscriptionId) {
-      const subscription = await this.stripe['subscriptions'].retrieve(subscriptionId) as StripeSubscription;
-      const priceId = subscription.items.data[0]?.price?.id ?? '';
-      plan = getPlanFromPriceId(priceId);
-    }
-
-    await this.prisma.workspace.updateMany({
+    await this.prisma.workspace.update({
       where: { id: workspaceId },
       data: {
-        plan: plan as 'SOLO' | 'BROKERAGE' | 'ENTERPRISE',
+        ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
         status: 'ACTIVE',
-        stripeSubscriptionId: subscriptionId ?? null,
       },
     });
 
-    await queues.auditLog.add('subscription-created', {
-      workspaceId,
-      action: 'subscription.created',
-      resource: 'workspace',
-      resourceId: workspaceId,
-      newValue: { plan, status: 'ACTIVE' },
-    }).catch(() => undefined);
-
-    logger.info({ workspaceId, plan }, 'billing: subscription activated');
+    logger.info({ workspaceId, subscriptionId, sessionId: session.id }, 'Billing: checkout completed — workspace activated');
   }
 
   /**
-   * Handles customer.subscription.deleted — cancels workspace.
+   * Handles Stripe subscription.created or subscription.updated webhook.
+   * Maps price ID to plan and updates workspace accordingly.
    */
-  async handleSubscriptionDeleted(event: StripeEventBase): Promise<void> {
-    const subscription = event.data.object as unknown as StripeSubscription;
-    const workspaceId = subscription.metadata?.['workspaceId'];
-
+  async handleSubscriptionCreated(event: StripeEvent): Promise<void> {
+    const subscription = event.data.object as StripeSubscription;
+    const workspaceId = (subscription.metadata as Record<string, string>)['workspaceId'];
     if (!workspaceId) {
-      logger.warn({ eventId: event.id }, 'billing: subscription.deleted missing workspaceId');
+      logger.warn({ subscriptionId: subscription.id }, 'Billing: no workspaceId in subscription metadata');
       return;
     }
 
-    await this.prisma.workspace.updateMany({
+    const priceId = subscription.items.data[0]?.price.id ?? '';
+    const plan = resolvePlan(priceId);
+
+    await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        stripeSubscriptionId: subscription.id,
+        plan,
+        status: 'ACTIVE',
+        tokenQuotaMonthly: planQuota(plan),
+      },
+    });
+
+    logger.info({ workspaceId, plan, subscriptionId: subscription.id }, 'Billing: subscription activated');
+  }
+
+  /**
+   * Handles Stripe subscription.updated webhook.
+   */
+  async handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
+    return this.handleSubscriptionCreated(event);
+  }
+
+  /**
+   * Constructs a Stripe webhook event
+   */
+  constructWebhookEvent(payload: string | Buffer, signature: string, secret: string): StripeEvent {
+    return this.stripe.webhooks.constructEvent(payload, signature, secret);
+  }
+
+  /**
+   * Handles Stripe customer.subscription.deleted webhook.
+   */
+  async handleSubscriptionDeleted(event: StripeEvent): Promise<void> {
+    const subscription = event.data.object as StripeSubscription;
+    const workspaceId = (subscription.metadata as Record<string, string>)['workspaceId'];
+    if (!workspaceId) return;
+
+    await this.prisma.workspace.update({
       where: { id: workspaceId },
       data: { status: 'CANCELLED', cancelledAt: new Date() },
     });
 
-    await queues.notification.add('ops-alert', {
-      type: 'OPS_ALERT',
-      workspaceId,
-      message: `Subscription cancelled for workspace ${workspaceId}`,
-    }).catch(() => undefined);
-
-    logger.info({ workspaceId }, 'billing: subscription cancelled');
+    logger.info({ workspaceId }, 'Billing: subscription cancelled');
   }
 
   /**
-   * Handles customer.subscription.updated — updates plan if price changed.
+   * Handles Stripe invoice.payment_failed webhook.
+   * Suspends workspace and enqueues billing alert.
    */
-  async handleSubscriptionUpdated(event: StripeEventBase): Promise<void> {
-    const subscription = event.data.object as unknown as StripeSubscription;
-    const workspaceId = subscription.metadata?.['workspaceId'];
-
-    if (!workspaceId) return;
-
-    const priceId = subscription.items.data[0]?.price?.id ?? '';
-    const plan = getPlanFromPriceId(priceId);
-
-    await this.prisma.workspace.updateMany({
-      where: { id: workspaceId },
-      data: { plan: plan as 'SOLO' | 'BROKERAGE' | 'ENTERPRISE' },
-    });
-
-    logger.info({ workspaceId, plan }, 'billing: subscription plan updated');
-  }
-
-  /**
-   * Handles invoice.payment_failed — suspends workspace.
-   */
-  async handlePaymentFailed(event: StripeEventBase): Promise<void> {
-    const invoice = event.data.object as unknown as StripeInvoice;
-    const customer = invoice.customer;
-    const customerId = typeof customer === 'string' ? customer : (customer as { id?: string } | undefined)?.id;
-
+  async handlePaymentFailed(event: StripeEvent): Promise<void> {
+    const invoice = event.data.object as StripeInvoice;
+    const rawCustomer = invoice.customer;
+    const customerId = typeof rawCustomer === 'string' ? rawCustomer : (rawCustomer as StripeCustomer | null)?.id;
     if (!customerId) return;
 
     const workspace = await this.prisma.workspace.findFirst({
-      where: { stripeCustomerId: customerId, deletedAt: null },
+      where: { stripeCustomerId: customerId },
     });
-
     if (!workspace) return;
 
     await this.prisma.workspace.update({
@@ -242,43 +217,23 @@ export class BillingService {
       data: { status: 'SUSPENDED' },
     });
 
-    await queues.notification.add('ops-alert', {
-      type: 'OPS_ALERT',
-      workspaceId: workspace.id,
-      message: `Payment failed for workspace ${workspace.id} (${workspace.ownerEmail})`,
-    }).catch(() => undefined);
-
-    logger.warn({ workspaceId: workspace.id }, 'billing: workspace suspended due to payment failure');
+    logger.warn({ workspaceId: workspace.id, customerId }, 'Billing: payment failed — workspace suspended');
   }
 
-  /**
-   * Constructs and verifies a Stripe webhook event from raw body + signature.
-   */
-  constructWebhookEvent(rawBody: Buffer, signature: string, secret: string): StripeEventBase {
-    return this.stripe['webhooks'].constructEvent(rawBody, signature, secret) as StripeEventBase;
+  /** Returns the Stripe instance for webhook verification. */
+  getStripe(): InstanceType<typeof Stripe> {
+    return this.stripe;
   }
+}
 
-  /**
-   * Returns current month token usage and plan quota.
-   */
-  async getUsage(workspaceId: string): Promise<Result<{ used: number; quota: number; percent: number }>> {
-    try {
-      const workspace = await this.prisma.workspace.findFirst({
-        where: { id: workspaceId, deletedAt: null },
-      });
+function resolvePlan(priceId: string): 'SOLO' | 'BROKERAGE' | 'ENTERPRISE' {
+  if (priceId.includes('brokerage') || priceId.includes('BROKERAGE')) return 'BROKERAGE';
+  if (priceId.includes('enterprise') || priceId.includes('ENTERPRISE')) return 'ENTERPRISE';
+  return 'SOLO';
+}
 
-      if (!workspace) {
-        return { ok: false, error: new Error('Workspace not found') };
-      }
-
-      const used = workspace.tokenUsageCurrentMonth;
-      const quota = workspace.tokenQuotaMonthly;
-      const percent = quota > 0 ? Math.round((used / quota) * 100) : 0;
-
-      return { ok: true, value: { used, quota, percent } };
-    } catch (err) {
-      logger.error({ err, workspaceId }, 'billing: getUsage failed');
-      return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
-    }
-  }
+function planQuota(plan: string): number {
+  if (plan === 'BROKERAGE') return 10_000_000;
+  if (plan === 'ENTERPRISE') return 50_000_000;
+  return 2_000_000;
 }

@@ -1,23 +1,46 @@
+export interface RetryOptions {
+  attempts?: number;
+  backoffMs?: number;
+  maxJitter?: number;
+}
+
+/**
+ * Retries an async function with exponential backoff.
+ * Accepts either `(fn, attempts)` or `(fn, options)` calling conventions.
+ */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: {
-    attempts?: number;
-    backoffMs?: number;
-    onRetry?: (attempt: number, error: Error) => void;
-  } = {},
+  attemptsOrOptions: number | RetryOptions = 3,
 ): Promise<T> {
-  const { attempts = 3, backoffMs = 500, onRetry } = options;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  const opts: RetryOptions = typeof attemptsOrOptions === 'number'
+    ? { attempts: attemptsOrOptions }
+    : attemptsOrOptions;
+
+  const { attempts = 3, backoffMs = 500, maxJitter = 200 } = opts;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      if (attempt === attempts) throw error;
-      onRetry?.(attempt, error as Error);
-      await new Promise((r) => setTimeout(r, backoffMs * Math.pow(2, attempt - 1)));
+      lastError = error;
+      if (attempt < attempts - 1) {
+        const delay = backoffMs * Math.pow(2, attempt) + Math.random() * maxJitter;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
-  throw new Error("unreachable");
+
+  throw lastError;
 }
 
-export const sleep = (ms: number): Promise<void> =>
-  new Promise((r) => setTimeout(r, ms));
+/**
+ * Executes a function and swallows any errors, returning undefined on failure.
+ */
+export async function tryCatch<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch {
+    return undefined;
+  }
+}

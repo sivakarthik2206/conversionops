@@ -1,82 +1,68 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core';
-import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER } from '@nestjs/core';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { WorkspaceModule } from './modules/workspace/workspace.module';
 import { LeadModule } from './modules/lead/lead.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { AgentModule } from './modules/agent/agent.module';
-import { RoutingModule } from './modules/routing/routing.module';
-import { AppointmentModule } from './modules/appointment/appointment.module';
-import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AppointmentModule } from './modules/appointment/appointment.module';
+import { RoutingModule } from './modules/routing/routing.module';
 import { AdminModule } from './modules/admin/admin.module';
-import { CalComWebhookController } from './webhooks/calcom/booking.webhook';
-import { CreateAppointmentHandler } from './modules/appointment/commands/create-appointment.handler';
-import { UpdateAppointmentHandler } from './modules/appointment/commands/update-appointment.handler';
 import { RealtimeGateway } from './gateway/realtime.gateway';
 import { WorkspaceRoomsService } from './gateway/workspace.rooms';
-import { TwilioSmsWebhookController } from './webhooks/twilio/sms.webhook';
+import { TenantMiddleware } from './common/middleware/tenant.middleware';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { TwilioSMSWebhookController } from './webhooks/twilio/sms.webhook';
 import { TwilioVoiceWebhookController } from './webhooks/twilio/voice.webhook';
+import { CalComWebhookController } from './webhooks/calcom/booking.webhook';
 import { ZillowWebhookController } from './webhooks/zillow/zillow.webhook';
 import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.webhook';
-import { AuthGuard } from './common/guards/auth.guard';
-import { RbacGuard } from './common/guards/rbac.guard';
-import { AuditInterceptor } from './common/interceptors/audit.interceptor';
-import { TenantMiddleware } from './common/middleware/tenant.middleware';
-import { AuditLogMiddleware } from './common/middleware/audit-log.middleware';
-import { PrismaService } from './modules/prisma/prisma.service';
 
 @Module({
   imports: [
-    NestConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
     WorkspaceModule,
     LeadModule,
     ConversationModule,
     AgentModule,
-    RoutingModule,
-    AppointmentModule,
-    AnalyticsModule,
     BillingModule,
+    AnalyticsModule,
+    AppointmentModule,
+    RoutingModule,
     AdminModule,
   ],
   controllers: [
-    TwilioSmsWebhookController,
-    CalComWebhookController,
+    TwilioSMSWebhookController,
     TwilioVoiceWebhookController,
+    CalComWebhookController,
     ZillowWebhookController,
     GenericLeadWebhookController,
   ],
   providers: [
-    WorkspaceRoomsService,
     RealtimeGateway,
+    WorkspaceRoomsService,
     {
-      provide: APP_GUARD,
-      useFactory: (reflector: Reflector, prisma: PrismaService) =>
-        new AuthGuard(reflector, prisma),
-      inject: [Reflector, PrismaService],
-    },
-    {
-      provide: APP_GUARD,
-      useFactory: (reflector: Reflector) => new RbacGuard(reflector),
-      inject: [Reflector],
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: AuditInterceptor,
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
     },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
-      .apply(TenantMiddleware, AuditLogMiddleware)
+      .apply(TenantMiddleware)
       .exclude(
-        { path: 'v1/auth/(.*)', method: RequestMethod.ALL },
+        { path: 'v1/auth/magic-link', method: RequestMethod.POST },
+        { path: 'v1/auth/verify', method: RequestMethod.POST },
         { path: 'v1/webhooks/(.*)', method: RequestMethod.ALL },
+        { path: 'v1/admin/(.*)', method: RequestMethod.ALL },
+        { path: 'v1/health', method: RequestMethod.GET },
       )
       .forRoutes('*');
   }

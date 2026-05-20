@@ -26,8 +26,8 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     if (workspace) {
-      setFubKey(workspace.aiConfig.followUpBossApiKey ? '••••' + workspace.aiConfig.followUpBossApiKey.slice(-4) : '');
-      setCalKey(workspace.aiConfig.calComApiKey ? '••••' + workspace.aiConfig.calComApiKey.slice(-4) : '');
+      setFubKey(workspace.aiConfig.followUpBossApiKey ? '****' + workspace.aiConfig.followUpBossApiKey.slice(-4) : '');
+      setCalKey(workspace.aiConfig.calComApiKey ? '****' + workspace.aiConfig.calComApiKey.slice(-4) : '');
       setCalEventTypeId(workspace.aiConfig.calComEventTypeId ?? null);
     }
   }, [workspace]);
@@ -35,7 +35,7 @@ export default function IntegrationsPage() {
   const testFub = async () => {
     setTestingFub(true);
     try { await apiClient.post('/workspaces/me/integrations/fub/test', {}); addToast('Follow Up Boss connected!', 'success'); }
-    catch { addToast('Connection failed — check your API key', 'error'); }
+    catch { addToast('Connection failed â€” check your API key', 'error'); }
     finally { setTestingFub(false); }
   };
 
@@ -43,8 +43,8 @@ export default function IntegrationsPage() {
     setSaving(true);
     try {
       await apiClient.patch('/workspaces/me/ai-config', {
-        ...(fubKey && !fubKey.startsWith('••••') && { followUpBossApiKey: fubKey }),
-        ...(calKey && !calKey.startsWith('••••') && { calComApiKey: calKey }),
+        ...(fubKey && !fubKey.startsWith('****') && { followUpBossApiKey: fubKey }),
+        ...(calKey && !calKey.startsWith('****') && { calComApiKey: calKey }),
         ...(calEventTypeId && { calComEventTypeId: calEventTypeId }),
       });
       await queryClient.invalidateQueries({ queryKey: ['workspace'] });

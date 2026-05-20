@@ -1,23 +1,36 @@
-import { z } from "zod";
+/**
+ * Typed environment variable accessors.
+ * All access is lazy (read at call time, not module load) so that
+ * tests can set process.env before importing modules.
+ */
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z.string(),
-  REDIS_URL: z.string().default("redis://localhost:6379"),
-  GOOGLE_CLOUD_PROJECT: z.string().default("conversionops-prod"),
-  GOOGLE_CLOUD_REGION: z.string().default("us-central1"),
-  VERTEX_AI_MODEL: z.string().default("gemini-1.5-flash-001"),
-  PORT: z.string().default("3001").transform(Number),
-  LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
-});
+export function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  return value;
+}
 
-export type Env = z.infer<typeof envSchema>;
+export function getOptionalEnv(key: string, fallback: string): string {
+  return process.env[key] ?? fallback;
+}
 
-export function validateEnv(): Env {
-  const result = envSchema.safeParse(process.env);
-  if (!result.success) {
-    console.error("Invalid environment variables:", result.error.flatten().fieldErrors);
-    process.exit(1);
+/** Returns true only in production (NODE_ENV=production). */
+export function isProduction(): boolean {
+  return process.env['NODE_ENV'] === 'production';
+}
+
+/** Returns true in test environment (NODE_ENV=test or JEST_WORKER_ID set). */
+export function isTest(): boolean {
+  return process.env['NODE_ENV'] === 'test' || process.env['JEST_WORKER_ID'] !== undefined;
+}
+
+/**
+ * Validates that all required environment variables are present.
+ * Call this once at application bootstrap — throws if any are missing.
+ */
+export function validateRequiredEnvVars(keys: string[]): void {
+  const missing = keys.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-  return result.data;
 }

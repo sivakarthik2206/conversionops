@@ -1,7 +1,40 @@
-'use client';
-
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+
+export type RealtimeEvent =
+  | 'lead:created'
+  | 'lead:scored'
+  | 'lead:assigned'
+  | 'message:new'
+  | 'conversation:takeover'
+  | 'appointment:booked'
+  | 'notification:new';
+
+// Typed event payloads
+export interface LeadCreatedEvent {
+  leadId: string;
+  source: string;
+  workspaceId: string;
+  createdAt: string;
+  status: string;
+  name: string | null;
+  phone: string | null;
+  score: number;
+  tier: string;
+}
+
+export interface LeadScoredEvent {
+  leadId: string;
+  score: number;
+  tier: string;
+  workspaceId: string;
+}
+
+export interface LeadAssignedEvent {
+  leadId: string;
+  workspaceUserId: string;
+  workspaceId: string;
+}
 
 export interface MessageNewEvent {
   conversationId: string;
@@ -11,129 +44,84 @@ export interface MessageNewEvent {
   createdAt: string;
 }
 
-export interface LeadCreatedEvent {
-  leadId: string;
-  source: string;
-  createdAt: string;
-  workspaceId: string;
-}
-
-export interface LeadScoredEvent {
-  leadId: string;
-  score: number;
-  tier: string;
-}
-
-export interface LeadAssignedEvent {
-  leadId: string;
-  workspaceUserId: string;
-  routingReason?: string;
-}
-
-export interface AppointmentBookedEvent {
-  leadId: string;
-  conversationId: string;
-  appointmentId: string;
-}
-
 export interface ConversationTakeoverEvent {
   conversationId: string;
   takenOverBy: string;
 }
 
-export interface NotificationNewEvent {
-  notificationId: string;
-  type: string;
-  message: string;
+export interface AppointmentBookedEvent {
+  appointmentId: string;
+  leadId: string;
+  scheduledAt: string;
+  workspaceId: string;
 }
 
-export interface ServerToClientEvents {
-  'message:new': (data: MessageNewEvent) => void;
-  'lead:created': (data: LeadCreatedEvent) => void;
-  'lead:scored': (data: LeadScoredEvent) => void;
-  'lead:assigned': (data: LeadAssignedEvent) => void;
-  'appointment:booked': (data: AppointmentBookedEvent) => void;
-  'conversation:takeover': (data: ConversationTakeoverEvent) => void;
-  'notification:new': (data: NotificationNewEvent) => void;
-}
+type EventHandler = (data: unknown) => void;
 
-type EventName = keyof ServerToClientEvents;
-type EventHandler<E extends EventName> = ServerToClientEvents[E];
-
-interface UseRealtimeReturn {
-  connected: boolean;
-  on: <E extends EventName>(event: E, handler: EventHandler<E>) => () => void;
-  emit: (event: string, data?: unknown) => void;
-  joinConversation: (conversationId: string) => void;
-}
-
-const MAX_RECONNECT_ATTEMPTS = 5;
-const BASE_RECONNECT_DELAY_MS = 1000;
-
-export function useRealtime(): UseRealtimeReturn {
+export function useRealtime(workspaceId?: string) {
   const socketRef = useRef<Socket | null>(null);
-  const [connected, setConnected] = useState(false);
+  const handlersRef = useRef<Map<string, Set<EventHandler>>>(new Map());
 
   useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (!token) return;
+
     const wsUrl = process.env['NEXT_PUBLIC_WS_URL'] ?? 'http://localhost:3001';
-    const token = localStorage.getItem('auth_token');
 
     const socket = io(wsUrl, {
-      auth: { token: token ?? '' },
-      reconnection: true,
-      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-      reconnectionDelay: BASE_RECONNECT_DELAY_MS,
-      reconnectionDelayMax: BASE_RECONNECT_DELAY_MS * Math.pow(2, MAX_RECONNECT_ATTEMPTS),
-      randomizationFactor: 0.5,
+      auth: { token },
       transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      setConnected(true);
-    });
+    if (workspaceId) {
+      socket.on('connect', () => {
+        socket.emit('join:workspace', { workspaceId });
+      });
+    }
 
-    socket.on('disconnect', () => {
-      setConnected(false);
-    });
+    const events: RealtimeEvent[] = [
+      'lead:created', 'lead:scored', 'lead:assigned',
+      'message:new', 'conversation:takeover',
+      'appointment:booked', 'notification:new',
+    ];
 
-    socket.on('connect_error', (err: Error & { message: string }) => {
-      if (err.message.includes('401') || err.message.includes('Unauthorized')) {
-        localStorage.removeItem('auth_token');
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
-      }
-    });
+    for (const event of events) {
+      socket.on(event, (data: unknown) => {
+        const handlers = handlersRef.current.get(event);
+        handlers?.forEach((handler) => handler(data));
+      });
+    }
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [workspaceId]);
 
-  const on = useCallback(<E extends EventName>(event: E, handler: EventHandler<E>): (() => void) => {
-    const socket = socketRef.current;
-    if (!socket) return () => undefined;
+  const on = useCallback(<T = unknown>(event: RealtimeEvent, handler: (data: T) => void): (() => void) => {
+    const typedHandler = handler as EventHandler;
+    const handlers = handlersRef.current.get(event) ?? new Set();
+    handlers.add(typedHandler);
+    handlersRef.current.set(event, handlers);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    socket.on(event as string, handler as (...args: any[]) => void);
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      socket.off(event as string, handler as (...args: any[]) => void);
+      handlers.delete(typedHandler);
     };
   }, []);
 
-  const emit = useCallback((event: string, data?: unknown): void => {
-    const socket = socketRef.current;
-    if (!socket || !connected) return;
-    socket.emit(event, data);
-  }, [connected]);
+  const joinConversation = useCallback((conversationId: string) => {
+    if (socketRef.current && workspaceId) {
+      socketRef.current.emit('join:conversation', { conversationId, workspaceId });
+    }
+  }, [workspaceId]);
 
-  const joinConversation = useCallback((conversationId: string): void => {
-    emit('join:conversation', { conversationId });
-  }, [emit]);
+  const emit = useCallback((event: string, data: unknown) => {
+    socketRef.current?.emit(event, data);
+  }, []);
 
-  return { connected, on, emit, joinConversation };
+  return { on, emit, joinConversation, socket: socketRef.current };
 }

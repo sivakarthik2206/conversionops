@@ -1,133 +1,205 @@
 'use client';
 import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { BarChart3, Clock, ArrowUpRight } from 'lucide-react';
+import { MetricCard, DataTable, EmptyState, Skeleton, PageHeader } from '@conversionops/ui';
+import type { ColumnDef } from '@conversionops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, XAxis, YAxis } from 'recharts';
-import { MetricCard, PageHeader, Skeleton } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
 
-const RANGE_OPTIONS = [
-  { label: '7d', value: 7 },
-  { label: '30d', value: 30 },
-  { label: '90d', value: 90 },
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  NEW: '#4796ff', CONTACTED: '#4796ff', QUALIFYING: '#ffb347',
-  QUALIFIED: '#47ff8e', ROUTING: '#47ff8e', ASSIGNED: '#47ff8e',
-  APPOINTMENT_SCHEDULED: '#e8ff47', CONVERTED: '#e8ff47',
-  UNRESPONSIVE: '#52525b', DORMANT: '#52525b', OPT_OUT: '#ff4747',
-};
-
-const SOURCE_COLORS = ['#e8ff47','#47ff8e','#4796ff','#ffb347','#a78bfa','#ff4747'];
-
-interface FunnelData { status: string; count: number; }
-interface FunnelResponse { stages: FunnelData[] }
-interface VolumePoint { date: string; leads: number; }
-interface SourcePoint { source: string; count: number; }
-
-function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name?: string }>; label?: string }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-      {label && <p className="font-medium mb-1" style={{ color: 'var(--text-2)' }}>{label}</p>}
-      {payload.map((p, i) => <p key={i}>{p.value}</p>)}
-    </div>
-  );
+interface FunnelData {
+  NEW: number;
+  CONTACTED: number;
+  QUALIFYING: number;
+  QUALIFIED: number;
+  APPOINTMENT_SCHEDULED: number;
+  CONVERTED: number;
 }
 
-export default function AnalyticsPage() {
-  const [range, setRange] = useState(30);
+interface ResponseTimeData {
+  p50: number;
+  p90: number;
+  p99: number;
+  avgMs: number;
+}
 
-  const { data: funnel, isLoading: funnelLoading } = useQuery<FunnelResponse>({
-    queryKey: ['analytics-funnel', range],
-    queryFn: () => apiClient.get('/analytics/funnel', { days: range }),
-    retry: false,
+interface SourceRow {
+  id: string;
+  source: string;
+  leads: number;
+  qualified: number;
+  booked: number;
+  rate: number;
+}
+
+const stagger = {
+  container: { transition: { staggerChildren: 0.05 } },
+  item: {
+    initial: { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+  },
+};
+
+function msToReadable(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function conversionPct(numerator: number, denominator: number): string {
+  if (!denominator) return '0%';
+  return `${Math.round((numerator / denominator) * 100)}%`;
+}
+
+const SOURCE_COLUMNS: ColumnDef<SourceRow>[] = [
+  { key: 'source', header: 'Source', render: (row) => row.source },
+  { key: 'leads', header: 'Leads', render: (row) => row.leads },
+  { key: 'qualified', header: 'Qualified', render: (row) => row.qualified },
+  { key: 'booked', header: 'Booked', render: (row) => row.booked },
+  { key: 'rate', header: 'Conv. Rate', render: (row) => `${row.rate}%` },
+];
+
+export default function AnalyticsPage() {
+  const [dateRange, setDateRange] = useState('30d');
+
+  const { data: funnel, isLoading: funnelLoading } = useQuery<FunnelData>({
+    queryKey: ['analytics', 'funnel', dateRange],
+    queryFn: () => apiClient.get(`/analytics/funnel?range=${dateRange}`),
   });
 
-  const stages = funnel?.stages ?? [
-    { status: 'NEW', count: 0 }, { status: 'QUALIFIED', count: 0 }, { status: 'ASSIGNED', count: 0 },
-    { status: 'APPOINTMENT_SCHEDULED', count: 0 }, { status: 'CONVERTED', count: 0 },
-  ];
+  const { data: responseTimes, isLoading: rtLoading } = useQuery<ResponseTimeData>({
+    queryKey: ['analytics', 'response-times', dateRange],
+    queryFn: () => apiClient.get(`/analytics/response-times?range=${dateRange}`),
+  });
 
-  const volumeData: VolumePoint[] = Array.from({ length: Math.min(range, 14) }, (_, i) => ({
-    date: new Date(Date.now() - (i * 86400000)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    leads: 0,
-  })).reverse();
+  const { data: rawSources, isLoading: sourcesLoading } = useQuery<Omit<SourceRow, 'id'>[]>({
+    queryKey: ['analytics', 'sources', dateRange],
+    queryFn: () => apiClient.get(`/analytics/lead-sources?range=${dateRange}`),
+  });
 
-  const sourceData: SourcePoint[] = ['ZILLOW','WEB_FORM','MISSED_CALL','SMS_INBOUND','REFERRAL','OTHER'].map(s => ({ source: s.replace('_',' '), count: 0 }));
+  const sources: SourceRow[] = (rawSources ?? []).map((s, i) => ({ ...s, id: `src-${i}` }));
+  const isLoading = funnelLoading || rtLoading || sourcesLoading;
 
   return (
-    <div>
-      <PageHeader title="Analytics" subtitle="Lead conversion metrics"
-        action={
-          <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--bg-3)' }}>
-            {RANGE_OPTIONS.map(o => (
-              <button key={o.value} onClick={() => setRange(o.value)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-                style={{ background: range === o.value ? 'var(--bg-2)' : 'transparent', color: range === o.value ? 'var(--text)' : 'var(--text-3)' }}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        }
-      />
-
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        {['Total Leads','Qualified Rate','Booking Rate','Avg Response'].map(label => (
-          <MetricCard key={label} label={label} value="—" />
-        ))}
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Analytics"
+          subtitle="Lead funnel, response times, and source performance."
+        />
+        <div className="flex items-center gap-1 rounded-lg p-1" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
+          {(['7d', '30d', '90d'] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setDateRange(r)}
+              className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+              style={{
+                background: dateRange === r ? 'var(--bg-4)' : 'transparent',
+                color: dateRange === r ? 'var(--text)' : 'var(--text-3)',
+              }}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="rounded-[10px] border p-5 mb-6" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text)' }}>Conversion Funnel</h2>
-        {funnelLoading ? <Skeleton variant="rect" height={200} /> : (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={stages} layout="vertical" margin={{ left: 80 }}>
-              <XAxis type="number" stroke="var(--text-3)" tick={{ fontSize: 11, fill: 'var(--text-3)' }} />
-              <YAxis type="category" dataKey="status" stroke="var(--text-3)" tick={{ fontSize: 11, fill: 'var(--text-3)' }} />
-              <Tooltip content={<DarkTooltip />} />
-              <Bar dataKey="count" fill="var(--accent)" radius={[0,4,4,0]}>
-                {stages.map(entry => <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? 'var(--accent)'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      <motion.div
+        variants={stagger.container}
+        initial="initial"
+        animate="animate"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)
+        ) : (
+          <>
+            <motion.div variants={stagger.item}>
+              <MetricCard label="Total Leads" value={funnel?.NEW ?? 0} trend={12} />
+            </motion.div>
+            <motion.div variants={stagger.item}>
+              <MetricCard
+                label={`Qualified ${funnel ? `(${conversionPct(funnel.QUALIFIED, funnel.NEW)})` : ''}`}
+                value={funnel?.QUALIFIED ?? 0}
+                trend={8}
+              />
+            </motion.div>
+            <motion.div variants={stagger.item}>
+              <MetricCard label="Appointments" value={funnel?.APPOINTMENT_SCHEDULED ?? 0} trend={5} />
+            </motion.div>
+            <motion.div variants={stagger.item}>
+              <MetricCard
+                label="Avg Response"
+                value={responseTimes ? msToReadable(responseTimes.avgMs) : 'â€”'}
+                trend={-3}
+              />
+            </motion.div>
+          </>
+        )}
+      </motion.div>
+
+      {/* Funnel */}
+      <div className="rounded-[10px] p-6" style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 mb-6">
+          <BarChart3 size={16} style={{ color: 'var(--accent)' }} />
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Conversion Funnel</h2>
+        </div>
+        {funnelLoading ? (
+          <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
+        ) : funnel ? (
+          <div className="space-y-2">
+            {(Object.entries(funnel) as [string, number][]).map(([stage, count], _idx, arr) => {
+              const maxCount = arr[0]?.[1] ?? 1;
+              const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+              return (
+                <div key={stage} className="flex items-center gap-4">
+                  <div className="w-36 text-xs text-right" style={{ color: 'var(--text-3)' }}>{stage.replace(/_/g, ' ')}</div>
+                  <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ background: 'var(--bg-4)' }}>
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: 'var(--accent)' }} />
+                  </div>
+                  <div className="w-12 text-xs text-right font-mono" style={{ color: 'var(--text-2)' }}>{count}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState title="No funnel data" description="Lead data will appear here after your first conversions." />
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-[10px] border p-5" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-          <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text)' }}>Lead Volume</h2>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={volumeData}>
-              <XAxis dataKey="date" stroke="var(--text-3)" tick={{ fontSize: 10, fill: 'var(--text-3)' }} />
-              <YAxis stroke="var(--text-3)" tick={{ fontSize: 10, fill: 'var(--text-3)' }} />
-              <Tooltip content={<DarkTooltip />} />
-              <Area type="monotone" dataKey="leads" stroke="#e8ff47" fill="rgba(232,255,71,0.10)" strokeWidth={1.5} />
-            </AreaChart>
-          </ResponsiveContainer>
+      {/* Response times */}
+      <div className="rounded-[10px] p-6" style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 mb-6">
+          <Clock size={16} style={{ color: 'var(--accent)' }} />
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Response Times</h2>
         </div>
-
-        <div className="rounded-[10px] border p-5" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-          <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text)' }}>Lead Sources</h2>
-          <div className="flex items-center gap-6">
-            <ResponsiveContainer width={160} height={160}>
-              <PieChart>
-                <Pie data={sourceData} dataKey="count" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
-                  {sourceData.map((_, i) => <Cell key={i} fill={SOURCE_COLORS[i % SOURCE_COLORS.length] ?? '#e8ff47'} />)}
-                </Pie>
-                <Tooltip content={<DarkTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-col gap-2">
-              {sourceData.map((s, i) => (
-                <div key={s.source} className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
-                  <span className="text-[11px]" style={{ color: 'var(--text-2)' }}>{s.source}</span>
-                </div>
-              ))}
-            </div>
+        {rtLoading ? (
+          <div className="grid grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+        ) : responseTimes ? (
+          <div className="grid grid-cols-3 gap-4">
+            {(['p50', 'p90', 'p99'] as const).map((key) => (
+              <div key={key} className="rounded-lg p-4 text-center" style={{ background: 'var(--bg-3)' }}>
+                <div className="text-xl font-bold font-mono mb-1" style={{ color: 'var(--accent)' }}>{msToReadable(responseTimes[key])}</div>
+                <div className="text-xs uppercase" style={{ color: 'var(--text-3)' }}>{key}</div>
+              </div>
+            ))}
           </div>
+        ) : null}
+      </div>
+
+      {/* Source breakdown */}
+      <div className="rounded-[10px] p-6" style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 mb-6">
+          <ArrowUpRight size={16} style={{ color: 'var(--accent)' }} />
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Lead Sources</h2>
         </div>
+        {sourcesLoading ? (
+          <Skeleton className="h-48" />
+        ) : sources.length > 0 ? (
+          <DataTable columns={SOURCE_COLUMNS} data={sources} />
+        ) : (
+          <EmptyState title="No source data" description="Source performance data will appear here." />
+        )}
       </div>
     </div>
   );

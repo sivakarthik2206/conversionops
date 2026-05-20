@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LayoutList, LayoutGrid, Globe, Phone, Building } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -45,10 +45,10 @@ const COLUMNS: ColumnDef<Lead>[] = [
     <div className="flex items-center gap-1.5">{sourceIcon(r.source)}<span className="text-xs" style={{ color: 'var(--text-2)' }}>{r.source.replace('_',' ')}</span></div>
   )},
   { key: 'status', header: 'Status', width: '130px', render: r => <StatusBadge status={r.status} /> },
-  { key: 'agent', header: 'Agent', width: '60px', render: r => r.assignedWorkspaceUserId ? <Avatar name={r.assignedWorkspaceUserId.slice(-4)} size="sm" /> : <span style={{ color: 'var(--text-4)' }}>—</span> },
+  { key: 'agent', header: 'Agent', width: '60px', render: r => r.assignedWorkspaceUserId ? <Avatar name={r.assignedWorkspaceUserId.slice(-4)} size="sm" /> : <span style={{ color: 'var(--text-4)' }}></span> },
 ];
 
-export default function LeadsPage() {
+function LeadsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const view = (searchParams.get('view') ?? 'list') as 'list' | 'kanban';
@@ -87,7 +87,7 @@ export default function LeadsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-6">
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search leads…"
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search leads"
           className="h-9 px-3 text-sm rounded-lg w-60 focus:outline-none focus:ring-1"
           style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text)', caretColor: 'var(--accent)' }} />
         <select value={tierFilter} onChange={e => setTierFilter(e.target.value)}
@@ -152,5 +152,13 @@ export default function LeadsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4"><div className="h-8 rounded bg-[var(--bg-3)]" /><div className="h-96 rounded bg-[var(--bg-3)]" /></div>}>
+      <LeadsContent />
+    </Suspense>
   );
 }

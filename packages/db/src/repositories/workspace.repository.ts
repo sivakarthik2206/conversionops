@@ -1,74 +1,35 @@
 import { PrismaClient, Workspace, Prisma } from '@prisma/client';
 
-export interface CreateWorkspaceInput {
-  name: string;
-  slug: string;
-  ownerEmail: string;
-  timezone?: string;
-  plan?: Prisma.EnumPlanFilter['equals'];
-}
-
 export class WorkspaceRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Finds a workspace by id, excluding soft-deleted records.
-   */
+  /** Finds a workspace by primary key. */
   async findById(id: string): Promise<Workspace | null> {
-    return this.prisma.workspace.findFirst({
-      where: { id, deletedAt: null },
-    });
+    return this.prisma.workspace.findUnique({ where: { id } });
   }
 
-  /**
-   * Finds a workspace by slug, excluding soft-deleted records.
-   */
+  /** Finds a workspace by unique slug. */
   async findBySlug(slug: string): Promise<Workspace | null> {
-    return this.prisma.workspace.findFirst({
-      where: { slug, deletedAt: null },
-    });
+    return this.prisma.workspace.findUnique({ where: { slug } });
   }
 
-  /**
-   * Finds a workspace by Stripe customer id (for billing webhooks).
-   */
-  async findByStripeCustomerId(customerId: string): Promise<Workspace | null> {
-    return this.prisma.workspace.findFirst({
-      where: { stripeCustomerId: customerId, deletedAt: null },
-    });
+  /** Creates a new workspace. */
+  async create(data: Prisma.WorkspaceCreateInput): Promise<Workspace> {
+    return this.prisma.workspace.create({ data });
   }
 
-  /**
-   * Creates a new workspace.
-   */
-  async create(data: {
-    name: string;
-    slug: string;
-    ownerEmail: string;
-    timezone?: string;
-    plan?: Workspace['plan'];
-  }): Promise<Workspace> {
-    return this.prisma.workspace.create({
-      data: {
-        name: data.name,
-        slug: data.slug,
-        ownerEmail: data.ownerEmail,
-        timezone: data.timezone ?? 'America/New_York',
-        plan: data.plan ?? 'SOLO',
-      },
-    });
+  /** Updates workspace fields. */
+  async update(id: string, data: Prisma.WorkspaceUpdateInput): Promise<Workspace> {
+    return this.prisma.workspace.update({ where: { id }, data });
   }
 
-  /**
-   * Updates a workspace by id. Validates the record exists before updating.
-   */
-  async update(
-    id: string,
-    data: Prisma.WorkspaceUpdateInput,
-  ): Promise<Workspace> {
-    return this.prisma.workspace.update({
-      where: { id },
-      data,
-    });
+  /** Finds workspace by Stripe customer ID. */
+  async findByStripeCustomerId(stripeCustomerId: string): Promise<Workspace | null> {
+    return this.prisma.workspace.findFirst({ where: { stripeCustomerId } });
+  }
+
+  /** Finds workspace by Stripe subscription ID. */
+  async findByStripeSubscriptionId(stripeSubscriptionId: string): Promise<Workspace | null> {
+    return this.prisma.workspace.findFirst({ where: { stripeSubscriptionId } });
   }
 }

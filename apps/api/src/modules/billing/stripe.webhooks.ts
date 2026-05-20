@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IdempotencyService } from '@conversionops/orchestration';
 import { IdempotencyConflictError } from '@conversionops/sdk-standards';
 import { logger } from '@conversionops/observability';
-import { BillingService } from './billing.service';
+import { BillingService, StripeEvent } from './billing.service';
 
 @Controller('webhooks/stripe')
 @Public()
@@ -45,7 +45,7 @@ export class StripeWebhookController {
       throw new BadRequestException('Missing raw body or stripe signature');
     }
 
-    let event: { id: string; type: string; data: { object: Record<string, unknown> } };
+    let event: StripeEvent;
     try {
       event = this.billingService.constructWebhookEvent(rawBody, signature, webhookSecret);
     } catch (err) {
@@ -79,10 +79,10 @@ export class StripeWebhookController {
     return { received: true };
   }
 
-  private async routeEvent(event: { id: string; type: string; data: { object: Record<string, unknown> } }): Promise<void> {
+  private async routeEvent(event: StripeEvent): Promise<void> {
     switch (event.type) {
       case 'checkout.session.completed':
-        await this.billingService.handleSubscriptionCreated(event);
+        await this.billingService.handleCheckoutCompleted(event);
         break;
       case 'customer.subscription.deleted':
         await this.billingService.handleSubscriptionDeleted(event);

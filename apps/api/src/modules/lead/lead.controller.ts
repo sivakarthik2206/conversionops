@@ -118,7 +118,7 @@ export class LeadController {
   }
 
   @Post(':id/assign')
-  @RequirePermission('lead:assign')
+  @RequirePermission('lead:write')
   async assignLead(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,

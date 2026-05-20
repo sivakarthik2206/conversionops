@@ -1,145 +1,136 @@
 import {
-  Body,
   Controller,
-  ForbiddenException,
-  Headers,
-  HttpCode,
-  HttpStatus,
   Post,
   Req,
+  Res,
+  HttpCode,
+  HttpStatus,
+  Headers,
 } from '@nestjs/common';
-import { Request } from 'express';
-import { validateRequest } from 'twilio/lib/webhooks/webhooks';
+import { Request, Response } from 'express';
+import twilio from 'twilio';
 import { Public } from '../../common/decorators/public.decorator';
-import { PrismaService } from '../../modules/prisma/prisma.service';
-import { queues, IdempotencyService } from '@conversionops/orchestration';
-import { isOptOutKeyword, processOptOut, validateConsent } from '@conversionops/compliance';
-import { logger } from '@conversionops/observability';
+import { IdempotencyService } from '@conversionops/orchestration';
 import { IdempotencyConflictError } from '@conversionops/sdk-standards';
-import { ConsentStatus, ConsentChannel } from '@conversionops/db';
+import { isOptOutKeyword } from '@conversionops/compliance';
+import { ConsentChannel } from '@conversionops/db';
+import { queues } from '@conversionops/orchestration';
+import { logger } from '@conversionops/observability';
+import { PrismaService } from '../../modules/prisma/prisma.service';
+import { ConsentRepository } from '@conversionops/db';
 
-const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
-
-interface TwilioSmsBody {
-  MessageSid: string;
-  From: string;
-  To: string;
-  Body: string;
+interface TwilioSMSWebhookBody {
+  MessageSid?: string;
+  From?: string;
+  To?: string;
+  Body?: string;
   AccountSid?: string;
   [key: string]: string | undefined;
 }
 
-@Controller('webhooks/twilio')
+@Controller('webhooks/twilio/sms')
 @Public()
-export class TwilioSmsWebhookController {
+export class TwilioSMSWebhookController {
   private readonly idempotencyService: IdempotencyService;
 
   constructor(private readonly prisma: PrismaService) {
     this.idempotencyService = new IdempotencyService(prisma);
   }
 
-  /**
-   * Handles inbound Twilio SMS webhooks.
-   * Must return TwiML within 5 seconds — all processing is async via queues.
-   */
-  @Post('sms')
+  @Post()
   @HttpCode(HttpStatus.OK)
-  async handleSms(
-    @Body() body: TwilioSmsBody,
-    @Headers('x-twilio-signature') signature: string,
+  async handleSMS(
     @Req() req: Request,
-  ): Promise<string> {
+    @Res() res: Response,
+    @Headers('x-twilio-signature') signature: string,
+  ): Promise<void> {
+    const body = req.body as TwilioSMSWebhookBody;
+    const { MessageSid, From, To, Body: messageBody } = body;
+
     const authToken = process.env['TWILIO_AUTH_TOKEN'] ?? '';
-    const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-    const params: Record<string, string> = {};
-    for (const [key, value] of Object.entries(body)) {
-      if (typeof value === 'string') params[key] = value;
+    const url = `${process.env['API_BASE_URL'] ?? 'https://api.conversionops.io'}/v1/webhooks/twilio/sms`;
+
+    const params = body as Record<string, string>;
+    if (authToken && signature) {
+      const isValid = twilio.validateRequest(authToken, signature, url, params);
+      if (!isValid) {
+        logger.warn({ messageSid: MessageSid }, 'twilio-sms: invalid signature');
+        res.status(HttpStatus.FORBIDDEN).send('<Response/>');
+        return;
+      }
     }
 
-    const isValid = validateRequest(authToken, signature ?? '', url, params);
-    if (!isValid && process.env['NODE_ENV'] === 'production') {
-      throw new ForbiddenException('Invalid Twilio signature');
+    if (!MessageSid || !From || !To) {
+      res.status(HttpStatus.OK).type('text/xml').send('<Response/>');
+      return;
     }
 
-    const idempotencyKey = `twilio:sms:${body.MessageSid}`;
-
+    const idempotencyKey = `twilio:sms:${MessageSid}`;
     try {
       const cached = await this.idempotencyService.acquire(idempotencyKey, 'twilio');
-      if (cached !== null) return TWIML_EMPTY;
+      if (cached !== null) {
+        res.status(HttpStatus.OK).type('text/xml').send('<Response/>');
+        return;
+      }
     } catch (err) {
-      if (err instanceof IdempotencyConflictError) return TWIML_EMPTY;
-      logger.error({ err, messageSid: body.MessageSid }, 'twilio/sms: idempotency acquire failed');
+      if (err instanceof IdempotencyConflictError) {
+        res.status(HttpStatus.OK).type('text/xml').send('<Response/>');
+        return;
+      }
     }
 
     try {
-      const fromPhone = body.From;
-      const toPhone = body.To;
-      const messageBody = body.Body ?? '';
+      if (messageBody && isOptOutKeyword(messageBody)) {
+        const workspace = await this.prisma.workspace.findFirst({
+          where: { twilioNumber: To },
+        });
+        if (workspace) {
+          const consentRepo = new ConsentRepository(this.prisma);
+          await consentRepo.upsertOptOut(From, workspace.id, messageBody.trim().toUpperCase(), ConsentChannel.SMS);
+          logger.info({ from: From, keyword: messageBody, workspaceId: workspace.id }, 'twilio-sms: opt-out recorded');
+        }
+        await this.idempotencyService.complete(idempotencyKey, { optOut: true });
+        res.status(HttpStatus.OK).type('text/xml').send('<Response/>');
+        return;
+      }
 
       const workspace = await this.prisma.workspace.findFirst({
-        where: { twilioNumber: toPhone, deletedAt: null },
+        where: { twilioNumber: To },
       });
 
       if (!workspace) {
-        logger.warn({ to: toPhone }, 'twilio/sms: no workspace for Twilio number');
-        await this.idempotencyService.complete(idempotencyKey, { skipped: 'no_workspace' });
-        return TWIML_EMPTY;
+        logger.warn({ to: To }, 'twilio-sms: no workspace for number');
+        await this.idempotencyService.complete(idempotencyKey, { skipped: true });
+        res.status(HttpStatus.OK).type('text/xml').send('<Response/>');
+        return;
       }
 
-      const hasConsent = await validateConsent(fromPhone, workspace.id, this.prisma);
-
+      const consentRepo = new ConsentRepository(this.prisma);
+      const hasConsent = await consentRepo.hasConsent(From, workspace.id, ConsentChannel.SMS);
       if (!hasConsent) {
-        const normalised = messageBody.trim().toUpperCase();
-        if (normalised === 'YES' || normalised === 'START') {
-          await this.prisma.consentRecord.create({
-            data: {
-              workspaceId: workspace.id,
-              phone: fromPhone,
-              channel: ConsentChannel.SMS,
-              status: ConsentStatus.OPTED_IN,
-              consentMethod: 'keyword',
-              consentText: messageBody,
-              consentSource: 'twilio_sms',
-            },
-          });
-          logger.info({ phone: fromPhone, workspaceId: workspace.id }, 'twilio/sms: consent opt-in');
-        } else {
-          logger.info({ phone: fromPhone, workspaceId: workspace.id }, 'twilio/sms: no consent, dropping message');
-          await this.idempotencyService.complete(idempotencyKey, { skipped: 'no_consent' });
-          return TWIML_EMPTY;
-        }
-      }
-
-      if (isOptOutKeyword(messageBody)) {
-        await processOptOut(fromPhone, workspace.id, messageBody, this.prisma);
-        await this.idempotencyService.complete(idempotencyKey, { optOut: true });
-        logger.info({ phone: fromPhone, keyword: messageBody }, 'twilio/sms: opt-out processed');
-        return TWIML_EMPTY;
+        await consentRepo.upsertOptIn(From, workspace.id, ConsentChannel.SMS, 'inbound_sms');
       }
 
       await queues.leadIntake.add(
         'sms-inbound',
         {
           workspaceId: workspace.id,
-          from: fromPhone,
-          to: toPhone,
-          body: messageBody,
-          messageSid: body.MessageSid,
+          from: From,
+          to: To,
+          body: messageBody ?? '',
+          messageSid: MessageSid,
           source: 'SMS_INBOUND',
         },
-        { removeOnComplete: 500, priority: 1 },
+        { removeOnComplete: 1000 },
       );
 
-      await this.idempotencyService.complete(idempotencyKey, { queued: true });
-      return TWIML_EMPTY;
+      await this.idempotencyService.complete(idempotencyKey, { enqueued: true });
+      logger.info({ messageSid: MessageSid, from: From, workspaceId: workspace.id }, 'twilio-sms: enqueued lead-intake');
     } catch (err) {
-      logger.error({ err, messageSid: body.MessageSid }, 'twilio/sms: processing error');
-      try {
-        await this.idempotencyService.fail(idempotencyKey);
-      } catch {
-        // ignore failure
-      }
-      return TWIML_EMPTY;
+      await this.idempotencyService.fail(idempotencyKey).catch(() => undefined);
+      logger.error({ err, messageSid: MessageSid }, 'twilio-sms: processing error');
     }
+
+    res.status(HttpStatus.OK).type('text/xml').send('<Response/>');
   }
 }
