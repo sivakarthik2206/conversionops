@@ -1,9 +1,17 @@
 {
-  "extends": "../../tooling/typescript/nestjs.json",
   "compilerOptions": {
-    "baseUrl": "./",
-    "declaration": false,
-    "declarationMap": false
+    "target": "ES2021",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "ignoreDeprecations": "5.0",
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

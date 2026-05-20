@@ -2,29 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(pnpm run *)",
-      "Bash(Get-Content packages/db/src/repositories/workspace.repository.ts -Raw)",
-      "Bash(Write-Output)",
-      "Bash(Write-Output \"---\")",
-      "Bash(Get-Content packages/db/src/repositories/message.repository.ts -Raw)",
-      "Bash(Get-Content packages/db/src/repositories/consent.repository.ts -Raw)",
-      "Bash(Get-Content packages/db/src/repositories/audit-log.repository.ts -Raw)",
-      "Bash(node -e \"const {PrismaClient} = require\\('@prisma/client'\\); console.log\\(Object.keys\\(require\\('@prisma/client'\\)\\)\\)\")",
-      "Bash(pnpm *)",
-      "Bash(node -e \"const s = require\\('stripe'\\); console.log\\(Object.keys\\(s.LATEST_API_VERSION || {}\\).join\\('\\\\n'\\)\\)\")",
-      "Bash(node -e \"const Stripe = require\\('stripe'\\); console.log\\(new Stripe\\('test', {apiVersion: ''}\\).apiVersion\\)\")",
-      "Bash(grep -v \"//.*console\")",
-      "Bash(node -e \"const Stripe = require\\('stripe'\\); console.log\\(typeof Stripe.Subscription, typeof Stripe.Checkout\\)\")",
-      "Bash(node -e \"const s = require\\('/c/Users/Karthik/Desktop/conversionops/node_modules/stripe'\\); console.log\\(Object.keys\\(s\\).slice\\(0,10\\)\\)\")",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('types',''\\), d.get\\('typings',''\\), list\\(d.get\\('exports',{}\\).items\\(\\)\\)[:5]\\)\")",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('engines:', d.get\\('engines',{}\\)\\); print\\('scripts:', list\\(d.get\\('scripts',{}\\).keys\\(\\)\\)\\)\")",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(list\\(d.get\\('tasks',d.get\\('pipeline',{}\\)\\).keys\\(\\)\\), indent=2\\)\\)\")",
-      "Bash(node *)",
-      "Bash(python3 -c ' *)",
-      "Bash(git show *)",
-      "Read(//tmp/**)",
-      "Bash(xargs '-I{}' python3 -c ' *)",
-      "Bash(python3 *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx tsc *)",
+      "Bash(pnpm -r exec -- tsc --noEmit --listFiles)",
+      "Bash(pnpm install *)",
+      "Bash(cd C:/Users/Karthik/Desktop/conversionops)",
+      "Bash(echo '=== __TRACKED_VAR__ ===')",
+      "Bash(cat __TRACKED_VAR__/tsconfig.json)",
+      "Bash(cat C:/Users/Karthik/Desktop/conversionops/__TRACKED_VAR__/package.json)"
     ]
   }
 }
