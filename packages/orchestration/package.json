@@ -3,7 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./src/index.ts",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
+    "build": "tsc",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

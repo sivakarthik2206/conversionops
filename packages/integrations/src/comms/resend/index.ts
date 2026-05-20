@@ -7,7 +7,7 @@ export class ResendClient {
   private readonly fromAddress: string;
 
   constructor(apiKey: string, fromAddress = 'ConversionOps <noreply@conversionops.io>') {
-    this.resend = new Resend(apiKey);
+    this.resend = new Resend(apiKey || 'placeholder_not_configured');
     this.fromAddress = fromAddress;
   }
 

@@ -20,7 +20,7 @@ const DEFAULT_MAX_TOKENS = 1024;
 const GENERATE_TIMEOUT_MS = 30_000;
 
 export class VertexAIClient {
-  private readonly model: GenerativeModel;
+  private readonly model: GenerativeModel | null;
   private readonly modelId: string;
 
   constructor() {
@@ -29,7 +29,8 @@ export class VertexAIClient {
     this.modelId = process.env['VERTEX_AI_MODEL'] ?? 'gemini-1.5-flash-001';
 
     if (!project) {
-      throw new Error('GOOGLE_CLOUD_PROJECT env var is required');
+      this.model = null;
+      return;
     }
 
     const vertexAI = new VertexAI({ project, location });
@@ -52,6 +53,10 @@ export class VertexAIClient {
     userPrompt: string,
     options: GenerateOptions = {},
   ): Promise<Result<GenerateResponse>> {
+    if (!this.model) {
+      return { ok: false, error: new ExternalServiceError('vertex-ai', 'GOOGLE_CLOUD_PROJECT not configured') };
+    }
+
     const startMs = Date.now();
 
     const timeoutPromise = new Promise<never>((_, reject) =>

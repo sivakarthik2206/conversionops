@@ -20,8 +20,7 @@ export class BillingService {
   private readonly stripe: InstanceType<typeof Stripe>;
 
   constructor(private readonly prisma: PrismaService) {
-    const key = process.env['STRIPE_SECRET_KEY'];
-    if (!key) throw new Error('STRIPE_SECRET_KEY is required');
+    const key = process.env['STRIPE_SECRET_KEY'] ?? 'sk_placeholder_not_configured';
     this.stripe = new Stripe(key, { apiVersion: '2026-04-22.dahlia' });
   }
 

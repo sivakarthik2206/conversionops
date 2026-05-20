@@ -3,7 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./src/index.ts",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
+    "build": "tsc && node -e \"const{cpSync,mkdirSync}=require('fs');mkdirSync('./dist/evals/fixtures',{recursive:true});cpSync('./src/evals/fixtures','./dist/evals/fixtures',{recursive:true})\"",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
