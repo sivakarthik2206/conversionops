@@ -26,7 +26,27 @@
       "PowerShell(cd \"C:\\\\Users\\\\Karthik\\\\Desktop\\\\conversionops\"; $output = node apps/worker/dist/main.js; Write-Output \"EXIT: $LASTEXITCODE\"; Write-Output \"OUTPUT: $output\")",
       "Bash(node apps/worker/dist/main.js)",
       "Read(//tmp/**)",
-      "Bash(mkdir -p /tmp)"
+      "Bash(mkdir -p /tmp)",
+      "Bash(git tag *)",
+      "PowerShell(pnpm run *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(docker compose version *)",
+      "PowerShell(Test-Path infra/docker/docker-compose.yml; Test-Path .env; \\(Get-Content .env -ErrorAction SilentlyContinue | Measure-Object -Line\\).Lines)",
+      "PowerShell(New-Item *)",
+      "PowerShell(pnpm *)",
+      "Bash(pnpm --filter @conversionops/api run type-check)",
+      "Bash(docker compose *)",
+      "Bash(pnpm *)",
+      "Bash(curl -s -o nul -w \"%{http_code}\" http://localhost:3001/v1/health)",
+      "Bash(curl -s http://localhost:3001/v1/health)",
+      "Bash(curl -sf http://localhost:3001/v1/health/live)",
+      "Bash(curl -s http://localhost:3001/v1/health/ready)",
+      "Bash(curl -s -o nul -w \"request-id: %{header_x-request-id}\\\\n\" http://localhost:3001/v1/health)",
+      "Bash(curl -sD - -o nul http://localhost:3001/v1/health)",
+      "Bash(findstr /i \"x-request\")",
+      "Bash(curl -sD headers.txt -o response.txt http://localhost:3001/v1/health)",
+      "Bash(del headers.txt response.txt)",
+      "Bash(curl *)"
     ]
   }
 }

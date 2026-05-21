@@ -2,6 +2,7 @@ import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/c
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { PrismaModule } from './modules/prisma/prisma.module';
+import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { WorkspaceModule } from './modules/workspace/workspace.module';
 import { LeadModule } from './modules/lead/lead.module';
@@ -24,8 +25,12 @@ import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.we
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env.local', '.env', '../../.env.local', '../../.env'],
+    }),
     PrismaModule,
+    HealthModule,
     AuthModule,
     WorkspaceModule,
     LeadModule,
