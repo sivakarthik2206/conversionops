@@ -80,21 +80,28 @@ export class LeadRepository {
     workspaceId: string,
     data: Prisma.LeadUpdateInput,
   ): Promise<Lead | null> {
-    const existing = await this.findById(id, workspaceId);
-    if (!existing) return null;
-    return this.prisma.lead.update({ where: { id }, data });
+    // updateMany with the (id, workspaceId) predicate closes the TOCTOU window
+    // that find-then-update-by-id has: between the find and the update, a row
+    // could in principle be transferred to another workspace. updateMany never
+    // touches a row outside the predicate.
+    const result = await this.prisma.lead.updateMany({
+      where: { id, workspaceId, deletedAt: null },
+      data: data as Prisma.LeadUncheckedUpdateManyInput,
+    });
+    if (result.count === 0) return null;
+    return this.findById(id, workspaceId);
   }
 
   /**
    * Soft-deletes a lead. Never hard deletes.
    */
   async softDelete(id: string, workspaceId: string): Promise<Lead | null> {
-    const existing = await this.findById(id, workspaceId);
-    if (!existing) return null;
-    return this.prisma.lead.update({
-      where: { id },
+    const result = await this.prisma.lead.updateMany({
+      where: { id, workspaceId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
+    if (result.count === 0) return null;
+    return this.prisma.lead.findFirst({ where: { id, workspaceId } });
   }
 
   /**

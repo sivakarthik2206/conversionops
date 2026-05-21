@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { Icon } from '@/components/Icon';
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/v1';
 const ADMIN_KEY = process.env['NEXT_PUBLIC_ADMIN_API_KEY'] ?? '';
@@ -25,24 +26,21 @@ interface PlatformHealth {
   };
 }
 
+const SERVICE_META: Record<string, { label: string; icon: Parameters<typeof Icon>[0]['name'] }> = {
+  api:      { label: 'API',         icon: 'globe' },
+  worker:   { label: 'Worker',      icon: 'cpu' },
+  database: { label: 'Database',    icon: 'database' },
+  redis:    { label: 'Redis',       icon: 'queue' },
+  twilio:   { label: 'Twilio',      icon: 'message' },
+  vertexAI: { label: 'Vertex AI',   icon: 'bot' },
+};
+
 async function fetchHealth(): Promise<PlatformHealth> {
   const res = await fetch(`${API}/admin/health`, {
     headers: { Authorization: `Bearer ${ADMIN_KEY}` },
   });
   if (!res.ok) throw new Error(`Failed: ${res.status}`);
   return res.json() as Promise<PlatformHealth>;
-}
-
-function statusColor(s: 'up' | 'down' | 'healthy' | 'degraded'): string {
-  if (s === 'up' || s === 'healthy') return 'var(--green)';
-  if (s === 'degraded') return 'var(--amber)';
-  return 'var(--red)';
-}
-
-function statusBg(s: 'up' | 'down' | 'healthy' | 'degraded'): string {
-  if (s === 'up' || s === 'healthy') return 'var(--green-dim)';
-  if (s === 'degraded') return 'var(--amber-dim)';
-  return 'var(--red-dim)';
 }
 
 export default function HealthPage() {
@@ -67,22 +65,82 @@ export default function HealthPage() {
     return () => clearInterval(interval);
   }, [load]);
 
+  const tone =
+    health?.status === 'healthy'  ? { color: 'var(--green)',  bg: 'rgba(77,255,165,0.10)',  border: 'rgba(77,255,165,0.25)' } :
+    health?.status === 'degraded' ? { color: 'var(--amber)',  bg: 'rgba(255,181,71,0.10)',  border: 'rgba(255,181,71,0.25)' } :
+    health?.status === 'down'     ? { color: 'var(--red)',    bg: 'rgba(255,92,92,0.10)',   border: 'rgba(255,92,92,0.25)' } :
+                                    { color: 'var(--text-3)', bg: 'rgba(255,255,255,0.04)', border: 'var(--border)' };
+
   return (
-    <div style={{ padding: 32, background: 'var(--bg)', minHeight: '100vh', fontFamily: 'DM Sans, sans-serif' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Platform Health</h1>
-          <p style={{ color: 'var(--text-3)', fontSize: 13, margin: '4px 0 0' }}>Auto-refreshes every 30s · Last: {lastFetch || '—'}</p>
+          <p className="eyebrow" style={{ color: 'var(--text-3)' }}>Live · auto-refreshes every 30s</p>
+          <h1 className="serif" style={{ fontSize: 28, color: 'var(--text)', margin: '4px 0 0', fontWeight: 400, letterSpacing: '-0.025em' }}>
+            Platform health
+          </h1>
         </div>
-        {health && (
-          <div style={{ padding: '6px 16px', borderRadius: 8, background: statusBg(health.status), color: statusColor(health.status), fontSize: 13, fontWeight: 600 }}>
-            {health.status.toUpperCase()}
-          </div>
-        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {lastFetch && (
+            <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              <Icon name="clock" size={10} stroke={1.6} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              {lastFetch}
+            </span>
+          )}
+          {health && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 14px',
+                borderRadius: 100,
+                background: tone.bg,
+                border: `1px solid ${tone.border}`,
+                color: tone.color,
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace",
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <span style={{ position: 'relative', width: 8, height: 8 }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '50%',
+                    background: tone.color,
+                    animation: 'pulseRing 2s ease-out infinite',
+                    opacity: 0.5,
+                  }}
+                />
+                <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: tone.color, boxShadow: `0 0 8px ${tone.color}` }} />
+              </span>
+              {health.status}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
-        <div style={{ padding: 16, borderRadius: 8, background: 'var(--red-dim)', color: 'var(--red)', marginBottom: 24 }}>
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 12,
+            background: 'rgba(255,92,92,0.08)',
+            border: '1px solid rgba(255,92,92,0.20)',
+            color: 'var(--red)',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 13,
+          }}
+        >
+          <Icon name="x-circle" size={16} stroke={1.8} />
           {error}
         </div>
       )}
@@ -90,33 +148,127 @@ export default function HealthPage() {
       {health && (
         <>
           {/* Services */}
-          <div style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 20, marginBottom: 24 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>Services</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-              {(Object.entries(health.services) as [string, 'up' | 'down'][]).map(([service, status]) => (
-                <div key={service} style={{ background: 'var(--bg-3)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-2)', textTransform: 'capitalize' }}>{service}</span>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(status) }} />
-                </div>
-              ))}
+          <div className="card" style={{ marginBottom: 16, padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <Icon name="layers" size={14} stroke={1.8} style={{ color: 'var(--accent)' }} />
+              <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Services</h2>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+              {(Object.entries(health.services) as [keyof typeof health.services, 'up' | 'down'][]).map(([service, status]) => {
+                const meta = SERVICE_META[service] ?? { label: service, icon: 'globe' as const };
+                const isUp = status === 'up';
+                return (
+                  <div
+                    key={service}
+                    style={{
+                      background: 'var(--bg-3)',
+                      border: '1px solid',
+                      borderColor: isUp ? 'rgba(77,255,165,0.18)' : 'rgba(255,92,92,0.20)',
+                      borderRadius: 11,
+                      padding: '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        background: isUp ? 'rgba(77,255,165,0.10)' : 'rgba(255,92,92,0.10)',
+                        color: isUp ? 'var(--green)' : 'var(--red)',
+                        border: '1px solid',
+                        borderColor: isUp ? 'rgba(77,255,165,0.22)' : 'rgba(255,92,92,0.22)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon name={meta.icon} size={14} stroke={1.8} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                        {meta.label}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: isUp ? 'var(--green)' : 'var(--red)',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          marginTop: 2,
+                        }}
+                      >
+                        {status}
+                      </div>
+                    </div>
+                    <span className={`status-dot ${isUp ? 'green' : 'red'}`} />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Metrics */}
-          <div style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>24h Metrics</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-              {([
-                { label: 'AI Latency p95', value: `${health.metrics.aiLatencyP95Ms}ms` },
-                { label: 'Twilio Latency p95', value: `${health.metrics.twilioLatencyP95Ms}ms` },
-                { label: 'Queue Lag', value: `${health.metrics.queueLagMs}ms` },
-                { label: 'CRM Sync Rate', value: `${health.metrics.crmSyncSuccessRate}%` },
-                { label: 'Active Workspaces', value: health.metrics.activeWorkspaces },
-                { label: 'Leads (24h)', value: health.metrics.totalLeads24h },
-              ] as { label: string; value: string | number }[]).map(({ label, value }) => (
-                <div key={label} style={{ background: 'var(--bg-3)', borderRadius: 8, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+          <div className="card" style={{ padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <Icon name="activity" size={14} stroke={1.8} style={{ color: 'var(--accent)' }} />
+              <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0 }}>24-hour metrics</h2>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+              {(
+                [
+                  { label: 'AI p95',         value: `${health.metrics.aiLatencyP95Ms}ms`,     icon: 'bot',     color: 'var(--purple)' },
+                  { label: 'Twilio p95',     value: `${health.metrics.twilioLatencyP95Ms}ms`, icon: 'message', color: 'var(--blue)' },
+                  { label: 'Queue lag',      value: `${health.metrics.queueLagMs}ms`,         icon: 'queue',   color: 'var(--amber)' },
+                  { label: 'CRM sync rate',  value: `${health.metrics.crmSyncSuccessRate}%`,  icon: 'sliders', color: 'var(--green)' },
+                  { label: 'Active workspaces', value: health.metrics.activeWorkspaces,       icon: 'building',color: 'var(--accent)' },
+                  { label: 'Leads (24h)',    value: health.metrics.totalLeads24h.toLocaleString(), icon: 'layers', color: 'var(--accent)' },
+                ] as { label: string; value: string | number; icon: Parameters<typeof Icon>[0]['name']; color: string }[]
+              ).map(m => (
+                <div
+                  key={m.label}
+                  style={{
+                    background: 'var(--bg-3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 11,
+                    padding: '16px 18px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -25,
+                      right: -25,
+                      width: 80,
+                      height: 80,
+                      borderRadius: '50%',
+                      background: `radial-gradient(circle, ${m.color}1a, transparent 70%)`,
+                      filter: 'blur(15px)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, position: 'relative' }}>
+                    <Icon name={m.icon} size={12} stroke={1.8} style={{ color: m.color }} />
+                    <span className="eyebrow" style={{ color: 'var(--text-3)' }}>{m.label}</span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 600,
+                      color: m.color,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      textShadow: `0 0 12px ${m.color}33`,
+                      position: 'relative',
+                    }}
+                  >
+                    {m.value}
+                  </div>
                 </div>
               ))}
             </div>
@@ -125,7 +277,10 @@ export default function HealthPage() {
       )}
 
       {!health && !error && (
-        <div style={{ color: 'var(--text-3)', textAlign: 'center', marginTop: 64 }}>Loading health data…</div>
+        <div className="card" style={{ textAlign: 'center', padding: 64, color: 'var(--text-3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <Icon name="loader" size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+          Loading health data&hellip;
+        </div>
       )}
     </div>
   );

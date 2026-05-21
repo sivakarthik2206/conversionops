@@ -1,5 +1,7 @@
 'use client';
 
+import { Icon } from '@/components/Icon';
+
 interface ErrorPageProps {
   error: Error & { digest?: string };
   reset: () => void;
@@ -7,47 +9,92 @@ interface ErrorPageProps {
 
 export default function GlobalError({ error, reset }: ErrorPageProps) {
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center',
-      padding: 32,
-    }}>
-      <div style={{
-        background: 'rgba(255,71,71,0.08)',
-        border: '1px solid rgba(255,71,71,0.2)',
-        borderRadius: 16,
-        padding: '40px 48px',
-        maxWidth: 520,
-      }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>⚠</div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Something went wrong</h1>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, marginBottom: 8 }}>
-          {error.message || 'An unexpected error occurred. Our team has been notified.'}
-        </p>
-        {error.digest && (
-          <p style={{ color: 'var(--text-4)', fontSize: 11, fontFamily: 'monospace', marginBottom: 24 }}>
-            Error ID: {error.digest}
-          </p>
-        )}
-        <button
-          onClick={reset}
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        padding: 32,
+        background: 'var(--bg)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(255,92,92,0.08) 0%, transparent 65%)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: '50%',
+          background: 'rgba(255,92,92,0.10)',
+          border: '1px solid rgba(255,92,92,0.30)',
+          color: 'var(--red)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 24,
+          position: 'relative',
+        }}
+      >
+        <Icon name="x-circle" size={28} stroke={1.6} />
+      </div>
+
+      <h1
+        className="serif"
+        style={{
+          fontSize: 'clamp(32px, 5vw, 48px)',
+          color: 'var(--text)',
+          margin: '0 0 12px',
+          fontWeight: 400,
+          letterSpacing: '-0.03em',
+          position: 'relative',
+        }}
+      >
+        Something{' '}
+        <span style={{ fontStyle: 'italic', fontFamily: "'Instrument Serif', serif", color: 'var(--red)' }}>
+          broke.
+        </span>
+      </h1>
+      <p style={{ fontSize: 15, color: 'var(--text-2)', margin: '0 0 8px', maxWidth: 460, lineHeight: 1.55, position: 'relative' }}>
+        {error.message || 'An unexpected error occurred. Our team has been notified.'}
+      </p>
+      {error.digest && (
+        <p
           style={{
-            background: 'var(--accent)',
-            color: '#000',
-            border: 'none',
-            borderRadius: 10,
-            padding: '12px 28px',
-            fontWeight: 700,
-            fontSize: 15,
-            cursor: 'pointer',
+            fontSize: 11,
+            color: 'var(--text-4)',
+            fontFamily: "'JetBrains Mono', monospace",
+            marginBottom: 28,
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: 'var(--bg-3)',
+            border: '1px solid var(--border)',
+            position: 'relative',
           }}
         >
+          Error ID · {error.digest}
+        </p>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, position: 'relative' }}>
+        <button onClick={reset} className="btn-primary">
+          <Icon name="reload" size={14} stroke={2} />
           Try again
         </button>
+        <a href="/" className="btn-ghost">
+          Go home
+        </a>
       </div>
     </div>
   );

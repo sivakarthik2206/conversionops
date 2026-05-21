@@ -2,8 +2,8 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { Icon } from '@/components/Icon';
 
 function VerifyContent() {
   const router = useRouter();
@@ -22,65 +22,98 @@ function VerifyContent() {
 
     void (async () => {
       try {
-        const data = await apiClient.post<{ token: string; user: { email: string } }>(
-          '/auth/verify',
-          { token },
-        );
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('auth_token', data.token);
-        }
-
+        const data = await apiClient.post<{ token: string; user: { email: string } }>('/auth/verify', { token });
+        if (typeof window !== 'undefined') localStorage.setItem('auth_token', data.token);
         setStatus('success');
         setTimeout(() => router.push('/'), 1200);
       } catch {
         setStatus('error');
-        setErrorMessage('This link has expired or already been used. Please request a new one.');
+        setErrorMessage('This link has expired or already been used. Request a new one to continue.');
       }
     })();
   }, [token, router]);
+
+  const config = {
+    verifying: { color: 'var(--accent)', icon: 'loader' as const, title: 'Signing you in', sub: 'Verifying your login link.' },
+    success:   { color: 'var(--green)',  icon: 'check'  as const, title: "You're in", sub: 'Redirecting to your dashboard…' },
+    error:     { color: 'var(--red)',    icon: 'x'      as const, title: 'Link expired', sub: errorMessage },
+  }[status];
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="w-full max-w-[400px] rounded-[12px] p-8 text-center"
-      style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="surface-card"
+      style={{
+        width: '100%',
+        maxWidth: 420,
+        padding: 36,
+        textAlign: 'center',
+        boxShadow: 'var(--shadow-xl)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
     >
-      {status === 'verifying' && (
-        <>
-          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--accent-dim)' }}>
-            <Loader2 size={24} className="animate-spin" style={{ color: 'var(--accent)' }} />
-          </div>
-          <h1 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>Signing you in…</h1>
-          <p className="text-sm" style={{ color: 'var(--text-3)' }}>Verifying your login link.</p>
-        </>
-      )}
-      {status === 'success' && (
-        <>
-          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--green-dim)' }}>
-            <CheckCircle size={24} style={{ color: 'var(--green)' }} />
-          </div>
-          <h1 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>You&apos;re in!</h1>
-          <p className="text-sm" style={{ color: 'var(--text-3)' }}>Redirecting to your dashboard…</p>
-        </>
-      )}
+      <div
+        style={{
+          position: 'absolute',
+          top: -60,
+          right: -60,
+          width: 200,
+          height: 200,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${config.color}1f, transparent 70%)`,
+          filter: 'blur(30px)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        style={{
+          width: 60,
+          height: 60,
+          borderRadius: '50%',
+          background: `${config.color}14`,
+          border: `1px solid ${config.color}33`,
+          color: config.color,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 20px',
+          position: 'relative',
+        }}
+      >
+        <Icon
+          name={config.icon}
+          size={26}
+          stroke={2.2}
+          style={status === 'verifying' ? { animation: 'spin 1s linear infinite' } : undefined}
+        />
+      </div>
+
+      <h1
+        className="serif"
+        style={{
+          fontSize: 24,
+          color: 'var(--text)',
+          margin: '0 0 8px',
+          fontWeight: 400,
+          fontStyle: 'italic',
+          fontFamily: "'Instrument Serif', serif",
+          position: 'relative',
+        }}
+      >
+        {config.title}
+      </h1>
+      <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 24px', lineHeight: 1.55, position: 'relative' }}>
+        {config.sub}
+      </p>
+
       {status === 'error' && (
-        <>
-          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--red-dim)' }}>
-            <XCircle size={24} style={{ color: 'var(--red)' }} />
-          </div>
-          <h1 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>Link expired</h1>
-          <p className="text-sm mb-6" style={{ color: 'var(--text-3)' }}>{errorMessage}</p>
-          <button
-            onClick={() => router.push('/login')}
-            className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors"
-            style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-          >
-            Request a new link
-          </button>
-        </>
+        <button onClick={() => router.push('/login')} className="btn-primary" style={{ width: '100%', height: 44, position: 'relative' }}>
+          Request a new link
+        </button>
       )}
     </motion.div>
   );
@@ -88,14 +121,36 @@ function VerifyContent() {
 
 export default function VerifyPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg)' }}>
-      <Suspense fallback={
-        <div className="w-full max-w-[400px] rounded-[12px] p-8 text-center" style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
-          <Loader2 size={24} className="animate-spin mx-auto" style={{ color: 'var(--accent)' }} />
-        </div>
-      }>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        background: 'var(--bg)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(232,255,71,0.06) 0%, transparent 65%)',
+          pointerEvents: 'none',
+        }}
+      />
+      <Suspense
+        fallback={
+          <div className="surface-card" style={{ width: '100%', maxWidth: 420, padding: 36, textAlign: 'center' }}>
+            <Icon name="loader" size={26} stroke={2.2} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+          </div>
+        }
+      >
         <VerifyContent />
       </Suspense>
+      <div className="grain" />
     </div>
   );
 }

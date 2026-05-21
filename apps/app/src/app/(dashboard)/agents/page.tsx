@@ -1,22 +1,31 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Mail, BarChart2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button, Badge, Avatar, Modal, Input, PageHeader, EmptyState, Skeleton, useToast } from '@conversionops/ui';
+import { Button, Avatar, Modal, Input, EmptyState, Skeleton, useToast } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
+import { Icon } from '@/components/Icon';
 
 interface Agent {
-  id: string; userId: string; role: string; displayName?: string | null;
-  isAvailable: boolean; totalLeadsAssigned: number; conversionRate: number;
-  languages: string[]; serviceAreas: string[];
+  id: string;
+  userId: string;
+  role: string;
+  displayName?: string | null;
+  isAvailable: boolean;
+  totalLeadsAssigned: number;
+  conversionRate: number;
+  languages: string[];
+  serviceAreas: string[];
   user?: { name?: string | null; email: string; } | null;
 }
 
 interface AgentPage { items: Agent[]; nextCursor: string | null; }
 
-const ROLE_VARIANT: Record<string, 'accent' | 'info' | 'neutral'> = {
-  OWNER: 'accent', ADMIN: 'info', AGENT: 'neutral', VIEWER: 'neutral',
+const ROLE_META: Record<string, { color: string; bg: string }> = {
+  OWNER:  { color: 'var(--accent)', bg: 'rgba(232,255,71,0.12)' },
+  ADMIN:  { color: 'var(--blue)',   bg: 'rgba(90,163,255,0.12)' },
+  AGENT:  { color: 'var(--text-2)', bg: 'rgba(255,255,255,0.04)' },
+  VIEWER: { color: 'var(--text-3)', bg: 'rgba(255,255,255,0.03)' },
 };
 
 export default function AgentsPage() {
@@ -57,82 +66,265 @@ export default function AgentsPage() {
 
   return (
     <div>
-      <PageHeader title="Agents" subtitle={`${agents.length} team members`}
-        action={<Button size="sm" onClick={() => setInviteOpen(true)}><UserPlus size={14} />Invite agent</Button>} />
-      {isLoading
-        ? <div className="grid grid-cols-3 gap-4">{Array.from({length:6}).map((_,i)=><Skeleton key={i} variant="rect" height={160} />)}</div>
-        : agents.length === 0
-          ? <EmptyState title="No agents yet" description="Invite your first team member to get started." action={<Button onClick={() => setInviteOpen(true)}>Invite agent</Button>} />
-          : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <AnimatePresence>
-                {agents.map((agent, i) => (
-                  <motion.div key={agent.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                    className="rounded-[10px] border p-5 flex flex-col gap-4" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <Avatar name={agent.displayName ?? agent.user?.name ?? agent.user?.email} size="lg" online={agent.isAvailable} />
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <p className="eyebrow" style={{ color: 'var(--text-3)' }}>Team</p>
+          <h1 className="serif" style={{ fontSize: 28, color: 'var(--text)', margin: '4px 0 0', fontWeight: 400, letterSpacing: '-0.02em' }}>
+            Agents
+            <span style={{ color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace", fontSize: 16, marginLeft: 8 }}>
+              {agents.length}
+            </span>
+          </h1>
+        </div>
+        <button onClick={() => setInviteOpen(true)} className="btn-primary">
+          <Icon name="plus" size={13} stroke={2.2} />
+          Invite agent
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="agent-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} variant="rect" height={180} />)}
+        </div>
+      ) : agents.length === 0 ? (
+        <EmptyState
+          illustration={<Icon name="agent" size={32} stroke={1.5} style={{ color: 'var(--text-4)' }} />}
+          title="No agents yet"
+          description="Invite your first team member to get started."
+          action={
+            <button onClick={() => setInviteOpen(true)} className="btn-primary">
+              <Icon name="plus" size={13} stroke={2.2} />
+              Invite agent
+            </button>
+          }
+        />
+      ) : (
+        <div className="agent-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <AnimatePresence>
+            {agents.map((agent, i) => {
+              const roleMeta = ROLE_META[agent.role] ?? ROLE_META['AGENT']!;
+              const name = agent.displayName ?? agent.user?.name ?? 'Agent';
+              return (
+                <motion.div
+                  key={agent.id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="surface-card"
+                  style={{
+                    padding: 20,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 16,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'border-color 0.3s, transform 0.3s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = 'var(--border-light)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  {/* Top */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                      <div style={{ position: 'relative' }}>
+                        <Avatar name={name} size="lg" online={agent.isAvailable} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {name}
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{agent.displayName ?? agent.user?.name ?? 'Agent'}</p>
-                          <p className="text-xs truncate max-w-[150px]" style={{ color: 'var(--text-3)' }}>{agent.user?.email}</p>
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>
+                          {agent.user?.email}
                         </div>
                       </div>
-                      <Badge variant={ROLE_VARIANT[agent.role] ?? 'neutral'} size="sm">{agent.role}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg px-3 py-2" style={{ background: 'var(--bg-3)' }}>
-                        <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-3)' }}>Leads</p>
-                        <p className="text-lg font-display" style={{ color: 'var(--text)' }}>{agent.totalLeadsAssigned}</p>
-                      </div>
-                      <div className="rounded-lg px-3 py-2" style={{ background: 'var(--bg-3)' }}>
-                        <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-3)' }}>Conv. Rate</p>
-                        <p className="text-lg font-display" style={{ color: 'var(--green)' }}>{(agent.conversionRate * 100).toFixed(0)}%</p>
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: 100,
+                        background: roleMeta.bg,
+                        border: `1px solid ${roleMeta.color}33`,
+                        color: roleMeta.color,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {agent.role}
+                    </span>
+                  </div>
+
+                  {/* Stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        background: 'var(--bg-3)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <div className="eyebrow" style={{ color: 'var(--text-4)', marginBottom: 4 }}>Leads</div>
+                      <div
+                        className="serif"
+                        style={{ fontSize: 22, lineHeight: 1, color: 'var(--text)', fontWeight: 400 }}
+                      >
+                        {agent.totalLeadsAssigned}
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full" style={{ background: agent.isAvailable ? 'var(--green)' : 'var(--text-4)' }} />
-                        <span className="text-xs" style={{ color: 'var(--text-3)' }}>{agent.isAvailable ? 'Available' : 'Unavailable'}</span>
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        background: 'var(--bg-3)',
+                        border: '1px solid rgba(77,255,165,0.18)',
+                      }}
+                    >
+                      <div className="eyebrow" style={{ color: 'var(--text-4)', marginBottom: 4 }}>Conv. rate</div>
+                      <div
+                        className="serif"
+                        style={{ fontSize: 22, lineHeight: 1, color: 'var(--green)', fontWeight: 400, textShadow: '0 0 12px rgba(77,255,165,0.20)' }}
+                      >
+                        {(agent.conversionRate * 100).toFixed(0)}%
                       </div>
-                      <button onClick={() => setRemoveId(agent.id)} className="p-1 rounded hover:bg-[var(--red-dim)] transition-colors" style={{ color: 'var(--text-4)' }}>
-                        <Trash2 size={13} />
-                      </button>
                     </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
+                  </div>
+
+                  {/* Footer */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-3)' }}>
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: agent.isAvailable ? 'var(--green)' : 'var(--text-5)',
+                          boxShadow: agent.isAvailable ? '0 0 6px var(--green)' : 'none',
+                        }}
+                      />
+                      {agent.isAvailable ? 'Available' : 'Offline'}
+                    </div>
+                    <button
+                      onClick={() => setRemoveId(agent.id)}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 7,
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-4)',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,92,92,0.08)'; e.currentTarget.style.color = 'var(--red)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-4)'; }}
+                    >
+                      <Icon name="trash" size={12} stroke={1.6} />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Invite modal */}
       <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite agent">
-        <div className="flex flex-col gap-4 mb-6">
-          <Input label="Email" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="agent@brokerage.com" autoFocus />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] uppercase tracking-widest font-medium" style={{ color: 'var(--text-3)' }}>Role</label>
-            <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} className="h-9 px-3 text-sm rounded-lg" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-              <option value="AGENT">Agent</option>
-              <option value="ADMIN">Admin</option>
-              <option value="VIEWER">Viewer</option>
-            </select>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 22 }}>
+          <Input
+            label="Email"
+            type="email"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+            placeholder="agent@brokerage.com"
+            autoFocus
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label className="eyebrow" style={{ color: 'var(--text-3)' }}>Role</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+              {(['AGENT', 'ADMIN', 'VIEWER'] as const).map(r => {
+                const meta = ROLE_META[r]!;
+                const active = inviteRole === r;
+                return (
+                  <button
+                    key={r}
+                    onClick={() => setInviteRole(r)}
+                    style={{
+                      padding: 12,
+                      borderRadius: 10,
+                      background: active ? meta.bg : 'var(--bg-3)',
+                      border: '1px solid',
+                      borderColor: active ? meta.color : 'var(--border)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: active ? meta.color : 'var(--text-2)',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {r}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-        <div className="flex gap-3 justify-end">
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setInviteOpen(false)}>Cancel</Button>
-          <Button size="sm" loading={inviting} onClick={handleInvite}><Mail size={13} />Send invitation</Button>
+          <Button size="sm" loading={inviting} onClick={handleInvite}>
+            Send invite
+          </Button>
         </div>
       </Modal>
 
       {/* Remove confirmation */}
       <Modal open={!!removeId} onClose={() => setRemoveId(null)} title="Remove agent?">
-        <p className="text-sm mb-6" style={{ color: 'var(--text-2)' }}>This agent will lose access to ConversionOps. Their assigned leads will be unassigned.</p>
-        <div className="flex gap-3 justify-end">
+        <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 22, lineHeight: 1.55 }}>
+          This agent will lose access to ConversionOps immediately. Their assigned leads will be unassigned and routed back to the queue.
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setRemoveId(null)}>Cancel</Button>
-          <Button variant="destructive" size="sm" loading={removing} onClick={() => removeId && void handleRemove(removeId)}>Remove</Button>
+          <Button variant="destructive" size="sm" loading={removing} onClick={() => removeId && void handleRemove(removeId)}>
+            Remove
+          </Button>
         </div>
       </Modal>
+
+      <style>{`
+        @media (max-width: 960px) { .agent-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 560px) { .agent-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
     </div>
   );
 }

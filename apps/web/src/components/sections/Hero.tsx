@@ -1,326 +1,742 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { Icon } from '@/components/Icon';
+
 const STATS = [
   { value: '60s', label: 'First response' },
-  { value: '3×', label: 'More appointments' },
-  { value: '78%', label: 'Lead contact rate' },
-  { value: '$0', label: 'Extra staff needed' },
+  { value: '3×',  label: 'More appointments' },
+  { value: '78%', label: 'Contact rate' },
+  { value: '24/7', label: 'Always answering' },
 ];
 
+const ROTATING = ['captured.', 'closed.', 'booked.', 'won.'];
+const CITIES = ['Miami', 'Orlando', 'Tampa', 'San Diego', 'Austin'];
+
 export default function Hero() {
+  const [wordIdx, setWordIdx] = useState(0);
+  const [cityIdx, setCityIdx] = useState(0);
+
+  useEffect(() => {
+    const w = setInterval(() => setWordIdx(i => (i + 1) % ROTATING.length), 2400);
+    const c = setInterval(() => setCityIdx(i => (i + 1) % CITIES.length), 3000);
+    return () => { clearInterval(w); clearInterval(c); };
+  }, []);
+
   return (
     <section
       style={{
         position: 'relative',
         minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '100px 24px 80px',
+        paddingTop: 120,
+        paddingBottom: 100,
         overflow: 'hidden',
+        isolation: 'isolate',
       }}
     >
-      {/* Background radial gradient */}
+      {/* Aurora mesh background */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'radial-gradient(ellipse 90% 60% at 50% 0%, rgba(232,255,71,0.05) 0%, transparent 65%)',
+          background: 'var(--grad-mesh-1)',
+          zIndex: -2,
           pointerEvents: 'none',
         }}
       />
 
-      {/* Noise texture */}
-      <div className="noise-overlay" />
-
-      {/* Floating blobs */}
+      {/* Grid texture */}
       <div
         style={{
           position: 'absolute',
-          top: '10%',
-          left: '5%',
-          width: 500,
-          height: 500,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(232,255,71,0.06) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-          animation: 'float 18s ease-in-out infinite',
+          inset: 0,
+          backgroundImage: `
+            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+          `,
+          backgroundSize: '64px 64px',
+          maskImage: 'radial-gradient(ellipse 80% 60% at 50% 20%, black 0%, transparent 80%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 20%, black 0%, transparent 80%)',
+          zIndex: -2,
           pointerEvents: 'none',
+        }}
+      />
+
+      {/* Floating glow orbs */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '8%',
+          left: '-8%',
+          width: 620,
+          height: 620,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(232,255,71,0.10) 0%, transparent 65%)',
+          filter: 'blur(80px)',
+          animation: 'float 22s ease-in-out infinite',
+          pointerEvents: 'none',
+          zIndex: -1,
         }}
       />
       <div
         style={{
           position: 'absolute',
           top: '30%',
-          right: '5%',
-          width: 400,
-          height: 400,
+          right: '-10%',
+          width: 540,
+          height: 540,
           borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(167,139,250,0.05) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-          animation: 'floatSlow 22s ease-in-out infinite',
+          background: 'radial-gradient(circle, rgba(179,155,255,0.10) 0%, transparent 70%)',
+          filter: 'blur(100px)',
+          animation: 'floatSlow 26s ease-in-out infinite',
           pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '15%',
-          left: '20%',
-          width: 350,
-          height: 350,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(71,150,255,0.04) 0%, transparent 70%)',
-          filter: 'blur(70px)',
-          animation: 'float 25s ease-in-out infinite reverse',
-          pointerEvents: 'none',
+          zIndex: -1,
         }}
       />
 
-      {/* Content */}
+      <div className="grain" />
+
       <div
+        className="container-page"
         style={{
           position: 'relative',
-          zIndex: 10,
-          maxWidth: 900,
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
+          display: 'grid',
+          gridTemplateColumns: '1.05fr 0.95fr',
           alignItems: 'center',
-          gap: 24,
-          textAlign: 'center',
+          gap: 64,
         }}
       >
-        {/* Badge */}
-        <div
-          className="animate-fade-up"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 14px',
-            borderRadius: 100,
-            border: '1px solid var(--border-light)',
-            background: 'var(--bg-2)',
-            fontSize: 12,
-            fontWeight: 500,
-            color: 'var(--text-2)',
-            letterSpacing: '0.02em',
-          }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              background: 'var(--green)',
-              boxShadow: '0 0 8px var(--green)',
-              animation: 'pulseDot 2s ease-in-out infinite',
-              flexShrink: 0,
-            }}
-          />
-          Now live in Miami · Orlando · Tampa · San Diego
-        </div>
+        {/* LEFT: copy */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 640 }}>
+          {/* City ticker chip */}
+          <div className="chip animate-fade-up" style={{ alignSelf: 'flex-start' }}>
+            <span
+              style={{
+                position: 'relative',
+                width: 8,
+                height: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'var(--green)',
+                  animation: 'pulseRing 1.8s ease-out infinite',
+                  opacity: 0.6,
+                }}
+              />
+              <span
+                style={{
+                  position: 'relative',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: 'var(--green)',
+                  boxShadow: '0 0 8px var(--green)',
+                }}
+              />
+            </span>
+            <span style={{ color: 'var(--text-3)', fontSize: 12 }}>Live in</span>
+            <span style={{ position: 'relative', overflow: 'hidden', height: 16, minWidth: 70, display: 'inline-block' }}>
+              {CITIES.map((c, i) => (
+                <span
+                  key={c}
+                  style={{
+                    position: i === cityIdx ? 'relative' : 'absolute',
+                    top: 0, left: 0,
+                    color: 'var(--text)',
+                    fontWeight: 600,
+                    fontSize: 12,
+                    opacity: i === cityIdx ? 1 : 0,
+                    transform: i === cityIdx ? 'translateY(0)' : 'translateY(-100%)',
+                    transition: 'opacity 0.5s, transform 0.5s var(--ease-out-quart)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </span>
+            <span style={{ width: 1, height: 12, background: 'var(--border-light)' }} />
+            <span style={{ color: 'var(--text-3)', fontSize: 12 }}>v1.0 shipping</span>
+          </div>
 
-        {/* Headline */}
-        <h1
-          className="animate-fade-up delay-100"
-          style={{
-            fontFamily: "'DM Serif Display', Georgia, serif",
-            fontStyle: 'italic',
-            fontSize: 'clamp(48px, 8.5vw, 80px)',
-            lineHeight: 1.05,
-            letterSpacing: '-0.03em',
-            color: 'var(--text)',
-            margin: 0,
-          }}
-        >
-          Every lead answered.<br />
-          Every deal{' '}
-          <span
+          {/* Headline */}
+          <h1
+            className="animate-fade-up delay-100 serif"
             style={{
-              color: 'var(--accent)',
-              textDecorationLine: 'underline',
-              textDecorationColor: 'rgba(232,255,71,0.4)',
-              textDecorationThickness: 3,
-              textUnderlineOffset: 6,
+              fontFamily: "'DM Serif Display', Georgia, serif",
+              fontSize: 'clamp(48px, 7.2vw, 92px)',
+              lineHeight: 0.98,
+              letterSpacing: '-0.035em',
+              color: 'var(--text)',
+              margin: 0,
+              fontWeight: 400,
             }}
           >
-            captured.
-          </span>
-        </h1>
+            Every lead<br />
+            <span style={{ fontStyle: 'italic', fontFamily: "'Instrument Serif', 'DM Serif Display', Georgia, serif" }}>
+              answered.
+            </span>{' '}
+            Every deal
+            <br />
+            <span
+              style={{
+                position: 'relative',
+                display: 'inline-block',
+                minWidth: '6ch',
+                height: '1em',
+                verticalAlign: 'baseline',
+              }}
+            >
+              {ROTATING.map((word, i) => (
+                <span
+                  key={word}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    color: 'var(--accent)',
+                    fontStyle: 'italic',
+                    fontFamily: "'Instrument Serif', 'DM Serif Display', Georgia, serif",
+                    opacity: i === wordIdx ? 1 : 0,
+                    transform: i === wordIdx ? 'translateY(0)' : 'translateY(40%)',
+                    transition: 'opacity 0.6s, transform 0.6s var(--ease-out-expo)',
+                    textShadow: '0 0 60px rgba(232,255,71,0.35)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {word}
+                </span>
+              ))}
+            </span>
+          </h1>
 
-        {/* Subheadline */}
-        <p
-          className="animate-fade-up delay-200"
-          style={{
-            fontFamily: "'DM Sans', sans-serif",
-            fontSize: 20,
-            fontWeight: 400,
-            color: 'var(--text-2)',
-            lineHeight: 1.6,
-            maxWidth: 560,
-            margin: 0,
-          }}
-        >
-          AI responds to every inbound lead in 60 seconds. Qualifies, books, syncs to CRM — while your agents focus on closings.
-        </p>
+          {/* Subhead */}
+          <p
+            className="animate-fade-up delay-200"
+            style={{
+              fontSize: 'clamp(17px, 1.5vw, 20px)',
+              fontWeight: 400,
+              color: 'var(--text-2)',
+              lineHeight: 1.55,
+              maxWidth: 540,
+              margin: 0,
+            }}
+          >
+            ConversionOps is the AI lead conversion infrastructure for real estate.
+            It responds to every inbound lead in 60 seconds &mdash; qualifies, books, syncs to CRM &mdash; while your agents focus on closings.
+          </p>
 
-        {/* CTA row */}
+          {/* CTAs */}
+          <div
+            className="animate-fade-up delay-300"
+            style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+          >
+            <a href="/book" className="btn-primary">
+              Start free trial
+              <Icon name="arrow-right" size={16} stroke={2.2} />
+            </a>
+            <a href="#demo" className="btn-ghost">
+              <Icon name="play" size={12} />
+              Watch 60-second demo
+            </a>
+          </div>
+
+          {/* Trust line */}
+          <div
+            className="animate-fade-up delay-400"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              fontSize: 12,
+              color: 'var(--text-4)',
+              marginTop: 4,
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="shield" size={14} stroke={1.6} style={{ color: 'var(--green)' }} />
+              TCPA compliant
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--text-5)' }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="home" size={14} stroke={1.6} style={{ color: 'var(--blue)' }} />
+              Fair Housing certified
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--text-5)' }} />
+            <span>Setup in 10 min</span>
+          </div>
+        </div>
+
+        {/* RIGHT: Live preview card */}
         <div
-          className="animate-fade-up delay-300"
+          className="animate-fade-up delay-300 hide-on-mobile"
           style={{
+            position: 'relative',
             display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            flexWrap: 'wrap',
             justifyContent: 'center',
           }}
         >
-          <a
-            href="/demo"
+          {/* Halo behind device */}
+          <div
             style={{
-              height: 52,
-              padding: '0 28px',
-              fontSize: 15,
-              fontWeight: 600,
-              borderRadius: 10,
-              background: 'var(--accent)',
-              color: '#000',
-              textDecoration: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              transition: 'transform 0.15s, filter 0.15s',
-              boxShadow: 'var(--shadow-accent)',
+              position: 'absolute',
+              top: '10%',
+              left: '20%',
+              right: '20%',
+              bottom: '10%',
+              background: 'radial-gradient(ellipse at center, rgba(232,255,71,0.20) 0%, transparent 65%)',
+              filter: 'blur(40px)',
+              zIndex: -1,
+              animation: 'glow 5s ease-in-out infinite',
             }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              el.style.transform = 'scale(1.02)';
-              el.style.filter = 'brightness(1.05)';
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              el.style.transform = 'scale(1)';
-              el.style.filter = 'brightness(1)';
-            }}
-          >
-            See it work →
-          </a>
-          <a
-            href="/pricing"
-            style={{
-              height: 52,
-              padding: '0 28px',
-              fontSize: 15,
-              fontWeight: 500,
-              borderRadius: 10,
-              background: 'transparent',
-              color: 'var(--text-2)',
-              textDecoration: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              border: '1px solid var(--border-light)',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              el.style.color = 'var(--text)';
-              el.style.borderColor = 'var(--border-focus)';
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              el.style.color = 'var(--text-2)';
-              el.style.borderColor = 'var(--border-light)';
-            }}
-          >
-            View pricing
-          </a>
-        </div>
+          />
 
-        {/* Stats bar */}
+          {/* Device frame */}
+          <div
+            style={{
+              width: 360,
+              minHeight: 580,
+              borderRadius: 36,
+              padding: 12,
+              background: 'linear-gradient(160deg, #25252e 0%, #14141a 50%, #0d0d12 100%)',
+              border: '1px solid var(--border-strong)',
+              boxShadow: 'var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.06)',
+              position: 'relative',
+              transform: 'perspective(1400px) rotateY(-6deg) rotateX(4deg)',
+            }}
+          >
+            {/* Notch */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 18,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 110,
+                height: 24,
+                borderRadius: 20,
+                background: '#000',
+                zIndex: 4,
+              }}
+            />
+
+            <div
+              style={{
+                background: 'var(--bg)',
+                borderRadius: 26,
+                minHeight: 556,
+                padding: 18,
+                paddingTop: 56,
+                color: 'var(--text)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Status bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                  fontSize: 11,
+                  color: 'var(--text-3)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                <span>9:41</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 16, height: 8, borderRadius: 2, border: '1px solid currentColor' }} />
+                </span>
+              </div>
+
+              {/* Contact header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingBottom: 14,
+                  borderBottom: '1px solid var(--border)',
+                  marginBottom: 16,
+                }}
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#000',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(232,255,71,0.25)',
+                  }}
+                >
+                  A
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Alex · Premier Realty</div>
+                  <div style={{ fontSize: 11, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--green)' }} />
+                    Active now
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Bubble side="them" delay="0.6s">
+                  Hey, just submitted an inquiry on the 3BR in Coral Gables ✨
+                </Bubble>
+                <TimeStamp delay="1.1s">2:14 PM &middot; just now</TimeStamp>
+                <Bubble side="me" delay="1.4s">
+                  Hi Sarah! Saw your inquiry — great choice, that one&apos;s gorgeous. Quick Q so I can prep:
+                  <br />are you pre-approved already?
+                </Bubble>
+                <TypingBubble delay="2.6s" />
+                <Bubble side="them" delay="3.6s">
+                  Yes, $850k. Hoping to move in ~60 days
+                </Bubble>
+                <Bubble side="me" delay="4.4s">
+                  Perfect. I&apos;m booking you with Sarah Chen, our Coral Gables specialist.
+                  Tomorrow 2:00 PM work?
+                </Bubble>
+                <Bubble side="me" delay="5.2s" highlight>
+                  ✓ Appointment confirmed &mdash; Tomorrow 2:00 PM
+                </Bubble>
+              </div>
+
+              {/* Input bar */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 16,
+                  left: 18,
+                  right: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 14px',
+                  borderRadius: 18,
+                  background: 'var(--bg-3)',
+                  border: '1px solid var(--border)',
+                  fontSize: 12,
+                  color: 'var(--text-4)',
+                }}
+              >
+                <Icon name="message" size={14} />
+                <span>Text message</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Floating metrics */}
+          <FloatingMetric
+            position={{ top: '4%', left: '-8%' }}
+            label="Response time"
+            value="00:00:47"
+            color="var(--green)"
+            icon="clock"
+            delay={0.6}
+          />
+          <FloatingMetric
+            position={{ bottom: '8%', right: '-6%' }}
+            label="Lead score"
+            value="94 / 100"
+            color="var(--accent)"
+            icon="target"
+            delay={0.9}
+          />
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div
+        className="container-page animate-fade-up delay-500"
+        style={{ marginTop: 80, position: 'relative' }}
+      >
         <div
-          className="animate-fade-up delay-400"
+          className="stats-strip"
           style={{
-            marginTop: 40,
-            width: '100%',
-            maxWidth: 800,
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
             gap: 0,
+            padding: '28px 0',
             borderTop: '1px solid var(--border)',
-            paddingTop: 32,
+            borderBottom: '1px solid var(--border)',
+            position: 'relative',
           }}
         >
-          {STATS.map((stat, i) => (
+          {/* edge fades */}
+          <div style={{ position: 'absolute', left: 0, top: -1, bottom: -1, width: 60, background: 'linear-gradient(90deg, var(--bg), transparent)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', right: 0, top: -1, bottom: -1, width: 60, background: 'linear-gradient(-90deg, var(--bg), transparent)', pointerEvents: 'none' }} />
+
+          {STATS.map((s, i) => (
             <div
-              key={stat.label}
+              key={s.label}
               style={{
                 textAlign: 'center',
-                padding: '0 16px',
+                padding: '0 20px',
                 borderRight: i < 3 ? '1px solid var(--border)' : 'none',
               }}
             >
               <div
+                className="serif"
                 style={{
-                  fontFamily: "'DM Serif Display', Georgia, serif",
-                  fontSize: 32,
+                  fontSize: 'clamp(28px, 3.4vw, 40px)',
                   lineHeight: 1,
                   color: 'var(--accent)',
-                  marginBottom: 6,
-                  letterSpacing: '-0.02em',
+                  marginBottom: 8,
+                  textShadow: '0 0 24px rgba(232,255,71,0.20)',
                 }}
               >
-                {stat.value}
+                {s.value}
               </div>
-              <p
+              <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 12,
                   color: 'var(--text-3)',
-                  margin: 0,
-                  fontWeight: 400,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
                 }}
               >
-                {stat.label}
-              </p>
+                {s.label}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Scroll indicator */}
+      {/* Scroll cue */}
       <div
-        className="animate-fade-up delay-600"
         style={{
           position: 'absolute',
-          bottom: 32,
+          bottom: 24,
           left: '50%',
           transform: 'translateX(-50%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 4,
-          opacity: 0.5,
+          gap: 6,
+          opacity: 0.45,
+          zIndex: 1,
         }}
       >
-        <span style={{ fontSize: 11, color: 'var(--text-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Scroll</span>
-        <svg
-          width="16"
-          height="10"
-          viewBox="0 0 16 10"
-          fill="none"
-          style={{ animation: 'bounce 1.5s ease-in-out infinite', color: 'var(--text-4)' }}
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--text-3)',
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}
         >
-          <path d="M1 1L8 8L15 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+          Scroll
+        </span>
+        <Icon name="arrow-down" size={14} style={{ animation: 'bounce 1.8s ease-in-out infinite', color: 'var(--text-3)' }} />
       </div>
 
       <style>{`
+        @media (max-width: 1024px) {
+          .hide-on-mobile { display: none !important; }
+          section > div.container-page { grid-template-columns: 1fr !important; }
+        }
         @media (max-width: 640px) {
-          .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .stats-strip { grid-template-columns: repeat(2, 1fr) !important; row-gap: 24px !important; }
+          .stats-strip > div:nth-child(2n) { border-right: none !important; }
         }
       `}</style>
     </section>
+  );
+}
+
+function Bubble({
+  children,
+  side,
+  delay,
+  highlight,
+}: { children: React.ReactNode; side: 'me' | 'them'; delay: string; highlight?: boolean }) {
+  const isMe = side === 'me';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: isMe ? 'flex-end' : 'flex-start',
+        opacity: 0,
+        animation: `popIn 0.5s var(--ease-out-expo) ${delay} forwards`,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '82%',
+          padding: '8px 12px',
+          borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+          fontSize: 12.5,
+          lineHeight: 1.45,
+          color: isMe ? '#0a0a0b' : 'var(--text)',
+          background: highlight
+            ? 'linear-gradient(135deg, var(--green) 0%, #6affb8 100%)'
+            : isMe
+            ? 'linear-gradient(135deg, var(--accent), var(--accent-2))'
+            : 'var(--bg-3)',
+          fontWeight: highlight ? 600 : 400,
+          boxShadow: isMe ? '0 4px 14px rgba(232,255,71,0.18)' : 'none',
+          border: isMe ? 'none' : '1px solid var(--border)',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TypingBubble({ delay }: { delay: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'flex-start',
+        opacity: 0,
+        animation: `popIn 0.4s var(--ease-out-expo) ${delay} forwards`,
+      }}
+    >
+      <div
+        style={{
+          padding: '10px 14px',
+          borderRadius: '14px 14px 14px 4px',
+          background: 'var(--bg-3)',
+          border: '1px solid var(--border)',
+          display: 'flex',
+          gap: 4,
+        }}
+      >
+        {[0, 1, 2].map(i => (
+          <span
+            key={i}
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              background: 'var(--text-3)',
+              animation: `typing 1.2s ease-in-out infinite`,
+              animationDelay: `${i * 0.18}s`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TimeStamp({ children, delay }: { children: React.ReactNode; delay: string }) {
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        fontSize: 10,
+        color: 'var(--text-4)',
+        margin: '4px 0',
+        fontFamily: "'JetBrains Mono', monospace",
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        opacity: 0,
+        animation: `fadeIn 0.4s ease ${delay} forwards`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FloatingMetric({
+  position,
+  label,
+  value,
+  color,
+  icon,
+  delay,
+}: {
+  position: React.CSSProperties;
+  label: string;
+  value: string;
+  color: string;
+  icon: 'clock' | 'target';
+  delay: number;
+}) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        zIndex: 3,
+        ...position,
+        padding: '12px 16px',
+        borderRadius: 14,
+        background: 'linear-gradient(180deg, rgba(20,20,26,0.95), rgba(13,13,18,0.95))',
+        backdropFilter: 'blur(16px)',
+        border: '1px solid var(--border-light)',
+        boxShadow: 'var(--shadow-lg)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        opacity: 0,
+        animation: `fadeScale 0.7s var(--ease-out-expo) ${delay}s forwards, float ${8 + delay * 2}s ease-in-out ${delay + 1}s infinite`,
+        minWidth: 160,
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          background: `${color}1f`,
+          border: `1px solid ${color}33`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color,
+          flexShrink: 0,
+        }}
+      >
+        <Icon name={icon} size={16} stroke={2} />
+      </div>
+      <div>
+        <div
+          style={{
+            fontSize: 10,
+            color: 'var(--text-3)',
+            fontFamily: "'JetBrains Mono', monospace",
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            marginBottom: 2,
+          }}
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--text)',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
   );
 }

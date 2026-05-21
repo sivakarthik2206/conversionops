@@ -62,7 +62,7 @@ export async function runQualificationChain(
   prisma: PrismaClient,
 ): Promise<Result<QualificationResult>> {
   const memoryManager = new ConversationMemoryManager(vertexClient);
-  const context = await memoryManager.buildContext(conversationId, prisma);
+  const context = await memoryManager.buildContext(conversationId, workspace.id, prisma);
 
   const currentQualification = (lead.qualification as QualificationData | null) ?? {};
   const systemPrompt = buildSystemPrompt(workspace);

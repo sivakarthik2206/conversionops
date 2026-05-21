@@ -15,6 +15,7 @@ import { IdempotencyConflictError } from '@conversionops/sdk-standards';
 import { queues } from '@conversionops/orchestration';
 import { logger } from '@conversionops/observability';
 import { PrismaService } from '../../modules/prisma/prisma.service';
+import { buildWebhookUrl } from './webhook-url';
 
 interface TwilioVoiceWebhookBody {
   CallSid?: string;
@@ -44,16 +45,23 @@ export class TwilioVoiceWebhookController {
     const { CallSid, From, To, CallStatus } = body;
 
     const authToken = process.env['TWILIO_AUTH_TOKEN'] ?? '';
-    const url = `${process.env['API_BASE_URL'] ?? 'https://api.conversionops.io'}/v1/webhooks/twilio/voice`;
+    if (!authToken) {
+      logger.error({ callSid: CallSid }, 'twilio-voice: TWILIO_AUTH_TOKEN not configured — refusing webhook (fail-closed)');
+      res.status(HttpStatus.SERVICE_UNAVAILABLE).type('text/xml').send('<Response/>');
+      return;
+    }
+    if (!signature) {
+      logger.warn({ callSid: CallSid }, 'twilio-voice: missing x-twilio-signature header');
+      res.status(HttpStatus.FORBIDDEN).type('text/xml').send('<Response/>');
+      return;
+    }
 
+    const url = buildWebhookUrl(req, '/v1/webhooks/twilio/voice');
     const params = body as Record<string, string>;
-    if (authToken && signature) {
-      const isValid = twilio.validateRequest(authToken, signature, url, params);
-      if (!isValid) {
-        logger.warn({ callSid: CallSid }, 'twilio-voice: invalid signature');
-        res.status(HttpStatus.FORBIDDEN).type('text/xml').send('<Response/>');
-        return;
-      }
+    if (!twilio.validateRequest(authToken, signature, url, params)) {
+      logger.warn({ callSid: CallSid, url }, 'twilio-voice: invalid signature');
+      res.status(HttpStatus.FORBIDDEN).type('text/xml').send('<Response/>');
+      return;
     }
 
     if (!CallSid || !From || !To) {

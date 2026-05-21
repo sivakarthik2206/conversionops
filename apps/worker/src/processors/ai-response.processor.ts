@@ -5,7 +5,7 @@ import { logger } from '@conversionops/observability';
 import { queues } from '@conversionops/orchestration';
 import type { AiResponseJobData } from '@conversionops/orchestration';
 import type { EvalJobData } from '@conversionops/ai';
-import { ConsentChannel, ConsentStatus, MessageRole, NotificationType } from '@conversionops/db';
+import { MessageRole, NotificationType } from '@conversionops/db';
 import type { Prisma } from '@conversionops/db';
 import { isQuietHours, isOptOutKeyword } from '@conversionops/compliance';
 import { checkFairHousing } from '@conversionops/compliance';
@@ -149,29 +149,31 @@ export class AiResponseProcessor {
       },
     });
 
-    // Send SMS — only after message is persisted
+    // Send SMS — only after message is persisted.
+    // Wrapper enforces consent + quiet hours; this is the single TCPA gate.
     if (lead.phone) {
-      const consentRecord = await this.prisma.consentRecord.findFirst({
-        where: { phone: lead.phone, workspaceId, channel: ConsentChannel.SMS, status: ConsentStatus.OPTED_IN },
-      });
-
-      if (consentRecord) {
-        const twilio = new TwilioClient(
-          process.env['TWILIO_ACCOUNT_SID'] ?? '',
-          process.env['TWILIO_AUTH_TOKEN'] ?? '',
-          workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
-        );
-        const smsResult = await twilio.sendSMS({ to: lead.phone, body: content, workspaceId });
-        if (!smsResult.ok) {
-          logger.error({ err: smsResult.error, leadId }, 'ai-response: SMS send failed');
-        } else {
-          await this.prisma.message.update({
-            where: { id: message.id, workspaceId },
-            data: { providerMessageId: smsResult.value, deliveredAt: new Date() },
-          });
-        }
+      const twilio = new TwilioClient(
+        process.env['TWILIO_ACCOUNT_SID'] ?? '',
+        process.env['TWILIO_AUTH_TOKEN'] ?? '',
+        workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
+      );
+      const smsResult = await twilio.sendSMS(
+        {
+          to: lead.phone,
+          body: content,
+          workspaceId,
+          purpose: 'customer',
+          timezone: workspace.timezone,
+        },
+        this.prisma,
+      );
+      if (!smsResult.ok) {
+        logger.warn({ err: smsResult.error, leadId }, 'ai-response: SMS not sent (gate or transport failure)');
       } else {
-        logger.warn({ leadId, phone: lead.phone }, 'ai-response: no consent, SMS not sent');
+        await this.prisma.message.update({
+          where: { id: message.id, workspaceId },
+          data: { providerMessageId: smsResult.value, deliveredAt: new Date() },
+        });
       }
     }
 

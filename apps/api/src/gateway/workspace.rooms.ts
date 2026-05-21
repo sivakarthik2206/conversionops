@@ -15,8 +15,14 @@ export class WorkspaceRoomsService {
     return `workspace:${workspaceId}`;
   }
 
-  getConversationRoom(conversationId: string): string {
-    return `conv:${conversationId}`;
+  /**
+   * Conversation rooms are namespaced by workspaceId so that subscribing to a
+   * raw conversationId is impossible. Combined with conversation-ownership
+   * verification on join, this gives belt-and-braces tenant isolation on
+   * websocket fanout.
+   */
+  getConversationRoom(workspaceId: string, conversationId: string): string {
+    return `workspace:${workspaceId}:conv:${conversationId}`;
   }
 
   /**
@@ -55,11 +61,11 @@ export class WorkspaceRoomsService {
   /**
    * Emits an event to all clients subscribed to a specific conversation room.
    */
-  emitToConversation(conversationId: string, event: string, data: unknown): void {
+  emitToConversation(workspaceId: string, conversationId: string, event: string, data: unknown): void {
     if (!this.server) {
-      logger.warn({ conversationId, event }, 'WorkspaceRoomsService: server not initialised');
+      logger.warn({ workspaceId, conversationId, event }, 'WorkspaceRoomsService: server not initialised');
       return;
     }
-    this.server.to(this.getConversationRoom(conversationId)).emit(event, data);
+    this.server.to(this.getConversationRoom(workspaceId, conversationId)).emit(event, data);
   }
 }

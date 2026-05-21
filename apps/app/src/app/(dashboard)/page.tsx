@@ -1,11 +1,12 @@
-﻿'use client';
+'use client';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { MessageSquare, Clock } from 'lucide-react';
-import { MetricCard, PageHeader, EmptyState, Skeleton } from '@conversionops/ui';
+import { EmptyState, Skeleton } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
 import { useLeads } from '@/hooks/useLeads';
 import { useConversations } from '@/hooks/useConversations';
+import { Icon } from '@/components/Icon';
+import Link from 'next/link';
 
 interface WorkspaceHealth {
   totalLeads: number;
@@ -22,6 +23,22 @@ function timeAgo(date: string) {
   return `${Math.floor(diff/86400000)}d ago`;
 }
 
+const TIER_ORDER = ['PRIORITY', 'HOT', 'WARM', 'COLD', 'UNQUALIFIED'] as const;
+const TIER_META: Record<string, { color: string; icon: 'fire' | 'bolt' | 'target' | 'inbox' | 'minus'; label: string }> = {
+  PRIORITY:    { color: 'var(--accent)', icon: 'bolt',   label: 'Priority' },
+  HOT:         { color: 'var(--green)',  icon: 'fire',   label: 'Hot' },
+  WARM:        { color: 'var(--amber)',  icon: 'target', label: 'Warm' },
+  COLD:        { color: 'var(--blue)',   icon: 'inbox',  label: 'Cold' },
+  UNQUALIFIED: { color: 'var(--text-4)', icon: 'minus',  label: 'Unqualified' },
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function OverviewPage() {
   const { data: health, isLoading: healthLoading } = useQuery<WorkspaceHealth>({
     queryKey: ['workspace-health'],
@@ -35,93 +52,342 @@ export default function OverviewPage() {
     acc[l.tier] = (acc[l.tier] ?? 0) + 1;
     return acc;
   }, {});
-
-  const tierOrder = ['PRIORITY', 'HOT', 'WARM', 'COLD', 'UNQUALIFIED'];
-  const tierColors: Record<string, string> = {
-    PRIORITY: 'var(--accent)', HOT: 'var(--green)', WARM: 'var(--amber)',
-    COLD: 'var(--blue)', UNQUALIFIED: 'var(--text-4)',
-  };
+  const totalLeads = leads.length || 1;
 
   const metrics = [
-    { label: 'Total Leads', value: health?.totalLeads ?? 0 },
-    { label: 'Qualified Rate', value: `${(health?.qualifiedRate ?? 0).toFixed(1)}%` },
-    { label: 'Appointments Booked', value: health?.appointmentsBooked ?? 0 },
-    { label: 'Avg Response Time', value: health?.avgResponseMs ? `${(health.avgResponseMs / 1000).toFixed(1)}s` : '—' },
+    {
+      label: 'Total leads',
+      value: health?.totalLeads ?? 0,
+      icon: 'users' as const,
+      color: 'var(--accent)',
+      trend: '+12%',
+      trendPositive: true,
+    },
+    {
+      label: 'Qualified rate',
+      value: `${(health?.qualifiedRate ?? 0).toFixed(1)}%`,
+      icon: 'target' as const,
+      color: 'var(--green)',
+      trend: '+8%',
+      trendPositive: true,
+    },
+    {
+      label: 'Appointments',
+      value: health?.appointmentsBooked ?? 0,
+      icon: 'calendar' as const,
+      color: 'var(--purple)',
+      trend: '+5',
+      trendPositive: true,
+    },
+    {
+      label: 'Avg response',
+      value: health?.avgResponseMs ? `${(health.avgResponseMs / 1000).toFixed(1)}s` : '—',
+      icon: 'clock' as const,
+      color: 'var(--blue)',
+      trend: '−3s',
+      trendPositive: true,
+    },
   ];
 
   return (
     <div>
-      <PageHeader title="Overview" subtitle="Your lead conversion dashboard" />
+      {/* Hero greeting */}
+      <div style={{ marginBottom: 32 }}>
+        <p className="eyebrow" style={{ color: 'var(--text-3)', marginBottom: 8 }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        <h1
+          className="serif"
+          style={{
+            fontSize: 'clamp(28px, 3.4vw, 38px)',
+            color: 'var(--text)',
+            margin: 0,
+            fontWeight: 400,
+            lineHeight: 1.05,
+            letterSpacing: '-0.025em',
+          }}
+        >
+          {greeting()}.{' '}
+          <span style={{ fontStyle: 'italic', color: 'var(--text-3)', fontFamily: "'Instrument Serif', serif" }}>
+            Here&apos;s what&apos;s happening.
+          </span>
+        </h1>
+      </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      {/* Metric grid */}
+      <div
+        className="metric-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
         {healthLoading
-          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} variant="rect" height={120} />)
+          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} variant="rect" height={132} />)
           : metrics.map((m, i) => (
-              <motion.div key={m.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.35, ease: [0.16,1,0.3,1] }}>
-                <MetricCard label={m.label} value={m.value} />
+              <motion.div
+                key={m.label}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <MetricCard {...m} />
               </motion.div>
             ))}
       </div>
 
-      {/* Split: Conversations + Pipeline */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Recent Conversations */}
-        <div className="rounded-[10px] border overflow-hidden" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text)' }}>
-              <MessageSquare size={14} style={{ color: 'var(--text-3)' }} /> Recent Conversations
-            </h2>
-          </div>
+      {/* Split: Recent conversations + Pipeline */}
+      <div className="dashboard-split" style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16 }}>
+        {/* Recent conversations */}
+        <div className="surface-card" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <CardHeader
+            icon="message"
+            title="Live conversations"
+            action={<Link href="/conversations" style={{ fontSize: 12, color: 'var(--text-3)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              View all
+              <Icon name="arrow-right" size={11} stroke={2} />
+            </Link>}
+          />
           {convsLoading ? (
-            <div className="p-4 flex flex-col gap-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} variant="rect" height={40} />)}</div>
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} variant="rect" height={48} />)}
+            </div>
           ) : conversations.length === 0 ? (
-            <EmptyState title="No conversations yet" description="Conversations will appear when leads reply." />
+            <div style={{ padding: 24 }}>
+              <EmptyState title="No conversations yet" description="Conversations will appear when leads reply." />
+            </div>
           ) : (
-            conversations.slice(0, 5).map(conv => (
-              <div key={conv.id} className="px-5 py-3 flex items-center gap-3 hover:bg-[var(--bg-3)] transition-colors cursor-pointer" style={{ borderBottom: '1px solid var(--border)' }}>
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: conv.aiActive ? 'var(--green)' : 'var(--amber)' }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>{conv.leadId}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0" style={{ color: 'var(--text-3)' }}>
-                  <Clock size={11} />
-                  <span className="text-[11px]">{timeAgo(conv.updatedAt)}</span>
-                </div>
-              </div>
-            ))
+            <div style={{ flex: 1 }}>
+              {conversations.slice(0, 6).map((conv, i) => (
+                <Link
+                  key={conv.id}
+                  href={`/conversations/${conv.id}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 18px',
+                    textDecoration: 'none',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: conv.aiActive ? 'var(--green)' : 'var(--amber)',
+                      boxShadow: conv.aiActive ? '0 0 6px var(--green)' : '0 0 6px var(--amber)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Lead · {conv.leadId.slice(-8)}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <span
+                        style={{
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          background: conv.aiActive ? 'rgba(179,155,255,0.10)' : 'rgba(255,181,71,0.10)',
+                          color: conv.aiActive ? 'var(--purple)' : 'var(--amber)',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9.5,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {conv.aiActive ? 'AI' : 'Human'}
+                      </span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{timeAgo(conv.updatedAt)}</span>
+                    </div>
+                  </div>
+                  <Icon name="chevron-right" size={14} style={{ color: 'var(--text-4)' }} />
+                </Link>
+              ))}
+            </div>
           )}
         </div>
 
-        {/* Lead Pipeline */}
-        <div className="rounded-[10px] border overflow-hidden" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-          <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Lead Pipeline</h2>
-          </div>
-          <div className="p-5 flex flex-col gap-4">
-            {tierOrder.map(tier => {
+        {/* Lead pipeline */}
+        <div className="surface-card" style={{ overflow: 'hidden' }}>
+          <CardHeader
+            icon="chart"
+            title="Lead pipeline"
+            action={<Link href="/leads" style={{ fontSize: 12, color: 'var(--text-3)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              View all
+              <Icon name="arrow-right" size={11} stroke={2} />
+            </Link>}
+          />
+          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {TIER_ORDER.map((tier, idx) => {
               const count = tierCounts[tier] ?? 0;
-              const total = leads.length || 1;
+              const pct = (count / totalLeads) * 100;
+              const meta = TIER_META[tier]!;
               return (
-                <div key={tier}>
-                  <div className="flex justify-between mb-1.5">
-                    <span className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>{tier}</span>
-                    <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{count}</span>
+                <motion.div
+                  key={tier}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05, duration: 0.4 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+                >
+                  <div
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 8,
+                      background: `${meta.color}1a`,
+                      border: `1px solid ${meta.color}33`,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: meta.color,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Icon name={meta.icon} size={14} stroke={1.8} />
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-4)' }}>
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: tierColors[tier] }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(count / total) * 100}%` }}
-                      transition={{ duration: 0.8, ease: [0.16,1,0.3,1] }}
-                    />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>
+                        {meta.label}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {count}
+                      </span>
+                    </div>
+                    <div style={{ height: 4, borderRadius: 100, background: 'var(--bg-4)', overflow: 'hidden' }}>
+                      <motion.div
+                        style={{ height: '100%', borderRadius: 100, background: meta.color, boxShadow: `0 0 8px ${meta.color}` }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.2 + idx * 0.05 }}
+                      />
+                    </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
         </div>
+      </div>
+
+      <style>{`
+        @media (max-width: 1024px) { .metric-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 900px)  { .dashboard-split { grid-template-columns: 1fr !important; } }
+        @media (max-width: 560px)  { .metric-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </div>
+  );
+}
+
+function CardHeader({ icon, title, action }: { icon: Parameters<typeof Icon>[0]['name']; title: string; action?: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: '14px 18px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid var(--border)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon name={icon} size={13} stroke={1.8} style={{ color: 'var(--text-3)' }} />
+        <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0, letterSpacing: '-0.005em' }}>{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function MetricCard({
+  label, value, icon, color, trend, trendPositive,
+}: { label: string; value: string | number; icon: Parameters<typeof Icon>[0]['name']; color: string; trend?: string; trendPositive?: boolean }) {
+  return (
+    <div
+      className="surface-card"
+      style={{
+        padding: 18,
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'border-color 0.3s, transform 0.3s var(--ease-out-quart)',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'var(--border-light)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'var(--border)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      {/* Accent glow */}
+      <div
+        style={{
+          position: 'absolute',
+          top: -40,
+          right: -40,
+          width: 120,
+          height: 120,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${color}1a, transparent 70%)`,
+          filter: 'blur(20px)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, position: 'relative' }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 9,
+            background: `${color}14`,
+            border: `1px solid ${color}33`,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color,
+          }}
+        >
+          <Icon name={icon} size={15} stroke={1.8} />
+        </div>
+        {trend && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: trendPositive ? 'var(--green)' : 'var(--red)',
+              fontFamily: "'JetBrains Mono', monospace",
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
+            }}
+          >
+            <Icon name={trendPositive ? 'arrow-up' : 'arrow-down'} size={10} stroke={2.4} />
+            {trend}
+          </span>
+        )}
+      </div>
+
+      <div className="eyebrow" style={{ color: 'var(--text-3)', marginBottom: 4 }}>{label}</div>
+      <div
+        className="serif"
+        style={{
+          fontSize: 32,
+          lineHeight: 1,
+          color: 'var(--text)',
+          fontWeight: 400,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
       </div>
     </div>
   );

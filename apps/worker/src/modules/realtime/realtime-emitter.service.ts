@@ -40,12 +40,12 @@ export class RealtimeEmitterService implements OnModuleDestroy {
   /**
    * Emits an event to all clients subscribed to a conversation room.
    */
-  emitToConversation(conversationId: string, event: string, data: unknown): void {
+  emitToConversation(workspaceId: string, conversationId: string, event: string, data: unknown): void {
     if (!this.emitter) return;
     try {
-      this.emitter.to(`conv:${conversationId}`).emit(event, data);
+      this.emitter.to(`workspace:${workspaceId}:conv:${conversationId}`).emit(event, data);
     } catch (err) {
-      logger.warn({ err, conversationId, event }, 'RealtimeEmitter: emit to conversation failed');
+      logger.warn({ err, workspaceId, conversationId, event }, 'RealtimeEmitter: emit to conversation failed');
     }
   }
 

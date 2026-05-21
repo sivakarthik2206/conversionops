@@ -43,11 +43,11 @@ export async function runEvals(
 ): Promise<void> {
   try {
     const [message, lead, workspace, messages] = await Promise.all([
-      prisma.message.findFirst({ where: { id: messageId } }),
+      prisma.message.findFirst({ where: { id: messageId, workspaceId } }),
       prisma.lead.findFirst({ where: { id: leadId, workspaceId } }),
       prisma.workspace.findFirst({ where: { id: workspaceId } }),
       prisma.message.findMany({
-        where: { conversationId, deletedAt: null },
+        where: { conversationId, workspaceId, deletedAt: null },
         orderBy: { createdAt: 'asc' },
         select: { role: true, content: true },
       }),

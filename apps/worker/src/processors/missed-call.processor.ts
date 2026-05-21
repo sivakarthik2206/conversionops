@@ -113,7 +113,16 @@ export class MissedCallProcessor {
         toNumber ?? workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
       );
 
-      const smsResult = await twilio.sendSMS({ to: fromNumber, body: smsBody, workspaceId }, this.prisma);
+      const smsResult = await twilio.sendSMS(
+        {
+          to: fromNumber,
+          body: smsBody,
+          workspaceId,
+          purpose: 'customer',
+          timezone: workspace.timezone,
+        },
+        this.prisma,
+      );
       if (!smsResult.ok) {
         logger.error({ err: smsResult.error, leadId, fromNumber }, 'missed-call: SMS text-back failed');
       } else {

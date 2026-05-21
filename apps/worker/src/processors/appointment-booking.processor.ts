@@ -85,7 +85,16 @@ export class AppointmentBookingProcessor {
         workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
       );
 
-      const smsResult = await twilio.sendSMS({ to: lead.phone, body: messageBody, workspaceId }, this.prisma);
+      const smsResult = await twilio.sendSMS(
+        {
+          to: lead.phone,
+          body: messageBody,
+          workspaceId,
+          purpose: 'customer',
+          timezone: workspace.timezone,
+        },
+        this.prisma,
+      );
 
       if (smsResult.ok && conversationId) {
         await this.prisma.message.create({

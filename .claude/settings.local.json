@@ -46,7 +46,8 @@
       "Bash(findstr /i \"x-request\")",
       "Bash(curl -sD headers.txt -o response.txt http://localhost:3001/v1/health)",
       "Bash(del headers.txt response.txt)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(git commit *)"
     ]
   }
 }

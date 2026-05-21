@@ -1,13 +1,15 @@
 import {
   Controller,
   Post,
-  Body,
+  Req,
   HttpCode,
   HttpStatus,
   Headers,
   BadRequestException,
+  RawBodyRequest,
 } from '@nestjs/common';
-import { createHmac } from 'crypto';
+import { Request } from 'express';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../../common/decorators/public.decorator';
 import { IdempotencyService } from '@conversionops/orchestration';
 import { IdempotencyConflictError } from '@conversionops/sdk-standards';
@@ -29,35 +31,48 @@ export class CalComWebhookController {
   @Post()
   @HttpCode(HttpStatus.OK)
   async handleBookingWebhook(
-    @Body() body: Record<string, unknown>,
+    @Req() req: RawBodyRequest<Request>,
     @Headers('x-cal-signature-256') signature: string,
   ): Promise<{ received: boolean }> {
     const webhookSecret = process.env['CALCOM_WEBHOOK_SECRET'];
+    const isProd = process.env['NODE_ENV'] === 'production';
 
-    if (webhookSecret && signature) {
-      const expectedSig = createHmac('sha256', webhookSecret)
-        .update(JSON.stringify(body))
-        .digest('hex');
-      if (signature !== expectedSig) {
+    if (!webhookSecret) {
+      if (isProd) {
+        logger.error('calcom-webhook: CALCOM_WEBHOOK_SECRET not configured — refusing webhook (fail-closed)');
+        throw new BadRequestException('Webhook not configured');
+      }
+      logger.warn('calcom-webhook: CALCOM_WEBHOOK_SECRET not configured — signature check skipped (dev only)');
+    }
+
+    const rawBody = req.rawBody;
+    if (webhookSecret) {
+      if (!rawBody || !signature) {
+        throw new BadRequestException('Missing signature or raw body');
+      }
+      const expected = createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+      const expectedBuf = Buffer.from(expected, 'hex');
+      let providedBuf: Buffer;
+      try {
+        providedBuf = Buffer.from(signature, 'hex');
+      } catch {
+        throw new BadRequestException('Invalid signature format');
+      }
+      if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
         logger.warn('calcom-webhook: invalid signature');
         throw new BadRequestException('Invalid webhook signature');
       }
     }
 
-    let event: ReturnType<typeof parseCalComWebhook>;
-    try {
-      event = parseCalComWebhook(body);
-    } catch (err) {
-      logger.warn({ err }, 'calcom-webhook: failed to parse payload');
+    const body = req.body as Record<string, unknown>;
+    const event = parseCalComWebhook(body);
+    if (!event.ok) {
+      logger.warn({ err: event.error }, 'calcom-webhook: failed to parse payload');
       return { received: true };
     }
 
-    const bookingUid = String(body['uid'] ?? body['bookingId'] ?? '');
-    if (!bookingUid) {
-      return { received: true };
-    }
-
-    const idempotencyKey = `calcom:booking:${bookingUid}`;
+    const bookingUid = event.value.payload.uid;
+    const idempotencyKey = `calcom:booking:${event.value.triggerEvent}:${bookingUid}`;
 
     try {
       const cached = await this.idempotencyService.acquire(idempotencyKey, 'calcom');
@@ -68,10 +83,11 @@ export class CalComWebhookController {
       if (err instanceof IdempotencyConflictError) {
         return { received: true };
       }
+      throw err;
     }
 
     try {
-      await this.processEvent(event, bookingUid);
+      await this.processEvent(event.value, bookingUid);
       await this.idempotencyService.complete(idempotencyKey, { processed: true });
     } catch (err) {
       await this.idempotencyService.fail(idempotencyKey).catch(() => undefined);
@@ -82,26 +98,27 @@ export class CalComWebhookController {
   }
 
   private async processEvent(
-    eventResult: ReturnType<typeof parseCalComWebhook>,
+    event: NonNullable<Extract<ReturnType<typeof parseCalComWebhook>, { ok: true }>['value']>,
     bookingUid: string,
   ): Promise<void> {
-    if (!eventResult.ok) {
-      logger.error({ err: eventResult.error }, 'calcom-webhook: invalid event payload');
+    const workspaceId = await this.resolveWorkspaceId(event);
+    if (!workspaceId) {
+      logger.warn({ bookingUid, eventTypeId: event.payload.eventTypeId }, 'calcom-webhook: cannot attribute booking to workspace, skipping');
       return;
     }
-    const event = eventResult.value;
 
     if (event.triggerEvent === 'BOOKING_CREATED') {
       const attendeeEmail = event.payload.attendees[0]?.email;
       if (!attendeeEmail) return;
 
+      // Tenant-scoped lead lookup — never cross workspaces.
       const lead = await this.prisma.lead.findFirst({
-        where: { email: attendeeEmail, deletedAt: null },
+        where: { email: attendeeEmail, workspaceId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
       });
 
       if (!lead) {
-        logger.warn({ attendeeEmail, bookingUid }, 'calcom-webhook: no lead found for attendee');
+        logger.warn({ attendeeEmail, bookingUid, workspaceId }, 'calcom-webhook: no lead found for attendee in workspace');
         return;
       }
 
@@ -126,12 +143,51 @@ export class CalComWebhookController {
 
       logger.info({ leadId: lead.id, workspaceId: lead.workspaceId, bookingUid }, 'calcom-webhook: appointment created');
     } else if (event.triggerEvent === 'BOOKING_CANCELLED') {
+      // Tenant-scoped — never update appointments outside the resolved workspace.
       await this.prisma.appointment.updateMany({
-        where: { externalBookingId: bookingUid },
+        where: { externalBookingId: bookingUid, workspaceId },
         data: { status: 'CANCELLED' },
       });
 
-      logger.info({ bookingUid }, 'calcom-webhook: appointment cancelled');
+      logger.info({ bookingUid, workspaceId }, 'calcom-webhook: appointment cancelled');
     }
+  }
+
+  /**
+   * Maps a Cal.com booking to its workspace.
+   *
+   * Strategy:
+   *  1. If payload.eventTypeId is present, find the unique workspace that has
+   *     stored this eventTypeId in aiConfig.calcomEventTypeId.
+   *  2. If multiple workspaces match the same eventTypeId, refuse to attribute
+   *     (returns null — caller logs and skips). This is the safe default; an
+   *     operator should make eventTypeIds unique per workspace.
+   *
+   * Without a confident workspace match we refuse to write, eliminating the
+   * cross-tenant attribution risk that existed when leads were looked up by
+   * email alone across all workspaces.
+   */
+  private async resolveWorkspaceId(
+    event: Extract<ReturnType<typeof parseCalComWebhook>, { ok: true }>['value'],
+  ): Promise<string | null> {
+    const eventTypeId = event.payload.eventTypeId;
+    if (!eventTypeId) return null;
+
+    const matches = await this.prisma.workspace.findMany({
+      where: {
+        aiConfig: { path: ['calcomEventTypeId'], equals: eventTypeId },
+        deletedAt: null,
+      },
+      select: { id: true },
+      take: 2,
+    });
+
+    if (matches.length !== 1) {
+      if (matches.length > 1) {
+        logger.error({ eventTypeId, matchCount: matches.length }, 'calcom-webhook: eventTypeId maps to multiple workspaces, refusing');
+      }
+      return null;
+    }
+    return matches[0]!.id;
   }
 }

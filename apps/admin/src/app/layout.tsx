@@ -1,55 +1,32 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import './globals.css';
+import { AdminShell } from '@/components/AdminShell';
 
 export const metadata: Metadata = {
   title: 'ConversionOps Admin',
-  description: 'Internal ops console for ConversionOps',
+  description: 'Internal ops console for ConversionOps.',
+  robots: { index: false, follow: false },
+  icons: {
+    icon: [
+      {
+        url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%226%22 fill=%22%23e8ff47%22/%3E%3Cpath d=%22M12 2L22 7v10l-10 5L2 17V7l10-5z%22 fill=%22none%22 stroke=%22%230a0a0b%22 stroke-width=%221.6%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M7 9.5l5 2.5 5-2.5M12 12v10%22 fill=%22none%22 stroke=%22%230a0a0b%22 stroke-width=%221.6%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E',
+      },
+    ],
+  },
 };
 
-const NAV_LINKS = [
-  { href: '/',                      label: 'Home' },
-  { href: '/ops/health',            label: 'Health' },
-  { href: '/ops/queues',            label: 'Queues' },
-  { href: '/ops/dead-letters',      label: 'Dead Letters' },
-  { href: '/ops/ai-debug',          label: 'AI Debug' },
-  { href: '/ops/ai-debug/evals',    label: 'Evals' },
-  { href: '/workspaces',            label: 'Workspaces' },
-] as const;
+export const viewport: Viewport = {
+  themeColor: '#07070a',
+  width: 'device-width',
+  initialScale: 1,
+};
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <nav style={{
-          background: 'var(--bg-2)',
-          borderBottom: '1px solid var(--border)',
-          padding: '0 24px',
-          height: 52,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 24,
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-        }}>
-          <span style={{ fontWeight: 700, color: 'var(--accent)', marginRight: 8 }}>
-            ConversionOps Admin
-          </span>
-          {NAV_LINKS.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              style={{ color: 'var(--text-2)', fontSize: 13, textDecoration: 'none' }}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
-        <main style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
-          {children}
-        </main>
+        <AdminShell>{children}</AdminShell>
       </body>
     </html>
   );

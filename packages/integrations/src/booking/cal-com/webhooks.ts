@@ -16,6 +16,7 @@ const CalComWebhookSchema = z.object({
     startTime: z.string(),
     endTime: z.string(),
     status: z.string().optional(),
+    eventTypeId: z.number().optional(),
     attendees: z.array(z.object({
       name: z.string().optional(),
       email: z.string(),

@@ -1,19 +1,27 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, GripVertical } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Button, Badge, Modal, Input, PageHeader, EmptyState, Skeleton, useToast } from '@conversionops/ui';
+import { Button, Modal, Input, EmptyState, Skeleton, useToast } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
+import { Icon } from '@/components/Icon';
 
 interface RoutingRule {
-  id: string; name: string; strategy: string; priority: number;
-  isActive: boolean; description?: string | null;
+  id: string;
+  name: string;
+  strategy: string;
+  priority: number;
+  isActive: boolean;
+  description?: string | null;
 }
 
-const STRATEGY_VARIANT: Record<string, 'accent' | 'info' | 'success' | 'neutral'> = {
-  LANGUAGE: 'accent', GEOGRAPHY: 'info', AVAILABILITY: 'success',
-  PERFORMANCE_BASED: 'accent', ROUND_ROBIN: 'neutral', CUSTOM: 'neutral',
+const STRATEGY_META: Record<string, { color: string; icon: Parameters<typeof Icon>[0]['name'] }> = {
+  LANGUAGE:          { color: 'var(--accent)', icon: 'message' },
+  GEOGRAPHY:         { color: 'var(--blue)',   icon: 'globe' },
+  AVAILABILITY:      { color: 'var(--green)',  icon: 'clock' },
+  PERFORMANCE_BASED: { color: 'var(--purple)', icon: 'star' },
+  ROUND_ROBIN:       { color: 'var(--amber)',  icon: 'reload' },
+  CUSTOM:            { color: 'var(--text-3)', icon: 'sliders' },
 };
 
 export default function RoutingPage() {
@@ -60,50 +68,214 @@ export default function RoutingPage() {
 
   return (
     <div>
-      <PageHeader title="Routing Rules" subtitle="Control how leads are assigned to agents"
-        action={<Button size="sm" onClick={() => setCreateOpen(true)}><Plus size={14} />Create rule</Button>} />
-      {isLoading
-        ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="rect" height={64} className="mb-3" />)
-        : sortedRules.length === 0
-          ? <EmptyState title="No routing rules" description="Create your first rule to control how leads are assigned." action={<Button onClick={() => setCreateOpen(true)}>Create rule</Button>} />
-          : (
-            <div className="rounded-[10px] border overflow-hidden" style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
-              {sortedRules.map((rule, i) => (
-                <motion.div key={rule.id} layout
-                  className="flex items-center gap-4 px-5 py-4 border-b"
-                  style={{ borderColor: 'var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-3)' }}>
-                  <GripVertical size={14} style={{ color: 'var(--text-4)', cursor: 'grab' }} />
-                  <Badge variant="neutral" size="sm" className="font-mono">{String(rule.priority).padStart(2, '0')}</Badge>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{rule.name}</p>
-                    {rule.description && <p className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{rule.description}</p>}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <p className="eyebrow" style={{ color: 'var(--text-3)' }}>Operations</p>
+          <h1 className="serif" style={{ fontSize: 28, color: 'var(--text)', margin: '4px 0 0', fontWeight: 400, letterSpacing: '-0.02em' }}>
+            Routing rules
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '6px 0 0' }}>
+            Control how leads flow to agents. Rules run top to bottom by priority.
+          </p>
+        </div>
+        <button onClick={() => setCreateOpen(true)} className="btn-primary">
+          <Icon name="plus" size={13} stroke={2.2} />
+          Create rule
+        </button>
+      </div>
+
+      {isLoading ? (
+        Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="rect" height={72} style={{ marginBottom: 10 }} />)
+      ) : sortedRules.length === 0 ? (
+        <EmptyState
+          illustration={<Icon name="route" size={32} stroke={1.5} style={{ color: 'var(--text-4)' }} />}
+          title="No routing rules"
+          description="Create your first rule to control how leads are assigned to agents."
+          action={
+            <button onClick={() => setCreateOpen(true)} className="btn-primary">
+              <Icon name="plus" size={13} stroke={2.2} />
+              Create rule
+            </button>
+          }
+        />
+      ) : (
+        <div className="surface-card" style={{ overflow: 'hidden' }}>
+          {sortedRules.map((rule, i) => {
+            const meta = STRATEGY_META[rule.strategy] ?? STRATEGY_META['CUSTOM']!;
+            return (
+              <motion.div
+                key={rule.id}
+                layout
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                  padding: '16px 20px',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Icon name="grip" size={14} style={{ color: 'var(--text-5)', cursor: 'grab', flexShrink: 0 }} />
+
+                {/* Priority */}
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    background: 'var(--bg-3)',
+                    border: '1px solid var(--border)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: 'var(--text-3)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {String(rule.priority).padStart(2, '0')}
+                </div>
+
+                {/* Strategy icon */}
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 9,
+                    background: `${meta.color}14`,
+                    border: `1px solid ${meta.color}33`,
+                    color: meta.color,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon name={meta.icon} size={14} stroke={1.8} />
+                </div>
+
+                {/* Body */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{rule.name}</div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: meta.color,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {rule.strategy.replace(/_/g, ' ')}
                   </div>
-                  <Badge variant={STRATEGY_VARIANT[rule.strategy] ?? 'neutral'} size="sm">
-                    {rule.strategy.replace('_', ' ')}
-                  </Badge>
-                  <button
-                    onClick={() => void toggleActive(rule)}
-                    className="w-8 h-4 rounded-full relative transition-colors"
-                    style={{ background: rule.isActive ? 'var(--accent)' : 'var(--bg-4)' }}>
-                    <span className="absolute top-0.5 w-3 h-3 rounded-full bg-[var(--bg-2)] transition-all"
-                      style={{ left: rule.isActive ? '18px' : '2px' }} />
-                  </button>
-                  <button onClick={() => void deleteRule(rule.id)} className="text-xs hover:underline" style={{ color: 'var(--red)' }}>Delete</button>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                  {rule.description && (
+                    <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {rule.description}
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggle */}
+                <button
+                  onClick={() => void toggleActive(rule)}
+                  aria-label={rule.isActive ? 'Pause rule' : 'Activate rule'}
+                  style={{
+                    width: 36,
+                    height: 20,
+                    borderRadius: 100,
+                    border: 'none',
+                    background: rule.isActive ? 'var(--accent)' : 'var(--bg-4)',
+                    boxShadow: rule.isActive ? '0 0 12px rgba(232,255,71,0.35)' : 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 2,
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      background: rule.isActive ? '#0a0a0b' : 'var(--text-3)',
+                      transition: 'left 0.25s var(--ease-out-quart)',
+                      left: rule.isActive ? 18 : 2,
+                    }}
+                  />
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={() => void deleteRule(rule.id)}
+                  aria-label="Delete rule"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 7,
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-4)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,92,92,0.08)'; e.currentTarget.style.color = 'var(--red)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-4)'; }}
+                >
+                  <Icon name="trash" size={13} stroke={1.6} />
+                </button>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create routing rule">
-        <div className="flex flex-col gap-4 mb-6">
-          <Input label="Rule Name" value={ruleName} onChange={e => setRuleName(e.target.value)} placeholder="e.g. Spanish-speaking leads" autoFocus />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] uppercase tracking-widest font-medium" style={{ color: 'var(--text-3)' }}>Strategy</label>
-            <select value={strategy} onChange={e => setStrategy(e.target.value)} className="h-9 px-3 text-sm rounded-lg" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-              {['LANGUAGE','GEOGRAPHY','AVAILABILITY','PERFORMANCE_BASED','ROUND_ROBIN'].map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
-            </select>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 22 }}>
+          <Input label="Rule name" value={ruleName} onChange={e => setRuleName(e.target.value)} placeholder="e.g. Spanish-speaking leads" autoFocus />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label className="eyebrow" style={{ color: 'var(--text-3)' }}>Strategy</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {(['LANGUAGE','GEOGRAPHY','AVAILABILITY','PERFORMANCE_BASED','ROUND_ROBIN','CUSTOM'] as const).map(s => {
+                const meta = STRATEGY_META[s]!;
+                const active = strategy === s;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setStrategy(s)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      background: active ? `${meta.color}14` : 'var(--bg-3)',
+                      border: '1px solid',
+                      borderColor: active ? meta.color : 'var(--border)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <Icon name={meta.icon} size={13} stroke={1.8} style={{ color: active ? meta.color : 'var(--text-3)' }} />
+                    <span style={{ fontSize: 12, fontWeight: 500, color: active ? meta.color : 'var(--text-2)' }}>
+                      {s.replace(/_/g, ' ')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-        <div className="flex gap-3 justify-end">
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>Cancel</Button>
           <Button size="sm" loading={creating} onClick={handleCreate}>Create rule</Button>
         </div>

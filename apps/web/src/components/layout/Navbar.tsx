@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Icon } from '@/components/Icon';
 
 const NAV_LINKS = [
-  { href: '#features', label: 'Features' },
+  { href: '/#features', label: 'Platform' },
+  { href: '/#demo', label: 'Live demo' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/demo', label: 'Demo' },
 ];
 
 export default function Navbar() {
@@ -13,250 +14,308 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 100);
+    const handler = () => setScrolled(window.scrollY > 24);
+    handler();
     window.addEventListener('scroll', handler, { passive: true });
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [menuOpen]);
+
   return (
-    <header
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
-        height: 60,
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        background: scrolled ? 'rgba(10,10,11,0.95)' : 'rgba(10,10,11,0.6)',
-        borderBottom: `1px solid ${scrolled ? 'var(--border)' : 'transparent'}`,
-        transition: 'background 0.3s ease, border-color 0.3s ease',
-      }}
-    >
-      <nav
+    <>
+      <header
         style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '0 24px',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+          padding: scrolled ? '10px 16px' : '16px 16px',
+          transition: 'padding 0.4s var(--ease-out-quart)',
+          pointerEvents: 'none',
         }}
       >
-        {/* Logo */}
-        <Link
-          href="/"
+        <nav
           style={{
-            fontFamily: "'DM Serif Display', Georgia, serif",
-            fontStyle: 'italic',
-            fontSize: 20,
-            color: 'var(--text)',
-            textDecoration: 'none',
+            maxWidth: 1200,
+            margin: '0 auto',
+            height: scrolled ? 56 : 64,
+            padding: '0 20px 0 18px',
             display: 'flex',
             alignItems: 'center',
-            gap: 3,
-            letterSpacing: '-0.01em',
+            justifyContent: 'space-between',
+            borderRadius: 100,
+            background: scrolled
+              ? 'rgba(11, 11, 14, 0.72)'
+              : 'rgba(11, 11, 14, 0.35)',
+            backdropFilter: 'blur(24px) saturate(160%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+            border: '1px solid',
+            borderColor: scrolled ? 'var(--border-light)' : 'var(--border)',
+            boxShadow: scrolled ? 'var(--shadow-md)' : 'none',
+            transition: 'all 0.4s var(--ease-out-quart)',
+            pointerEvents: 'auto',
           }}
         >
-          ConversionOps
-          <span
+          {/* Logo lockup */}
+          <Link
+            href="/"
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              display: 'inline-block',
-              marginLeft: 2,
-              boxShadow: '0 0 8px var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              color: 'var(--text)',
+              textDecoration: 'none',
             }}
-          />
-        </Link>
-
-        {/* Desktop nav links */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 32,
-          }}
-          className="hidden-mobile"
-        >
-          {NAV_LINKS.map(item => (
-            <a
-              key={item.href}
-              href={item.href}
+          >
+            <span
               style={{
-                fontSize: 14,
-                color: 'var(--text-2)',
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#0a0a0b',
+                boxShadow: '0 6px 16px rgba(232,255,71,0.30), inset 0 1px 0 rgba(255,255,255,0.45)',
+              }}
+            >
+              <Icon name="logo-mark" size={16} stroke={2} />
+            </span>
+            <span
+              style={{
+                fontFamily: "'DM Serif Display', Georgia, serif",
+                fontStyle: 'italic',
+                fontSize: 19,
+                letterSpacing: '-0.015em',
+              }}
+            >
+              ConversionOps
+            </span>
+          </Link>
+
+          {/* Desktop links */}
+          <div
+            className="hidden-mobile"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              background: 'rgba(255,255,255,0.025)',
+              padding: '4px 6px',
+              borderRadius: 100,
+              border: '1px solid var(--border)',
+            }}
+          >
+            {NAV_LINKS.map(item => (
+              <a
+                key={item.href}
+                href={item.href}
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--text-2)',
+                  textDecoration: 'none',
+                  padding: '7px 14px',
+                  borderRadius: 100,
+                  transition: 'color 0.2s, background 0.2s',
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLAnchorElement;
+                  el.style.color = 'var(--text)';
+                  el.style.background = 'rgba(255,255,255,0.04)';
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLAnchorElement;
+                  el.style.color = 'var(--text-2)';
+                  el.style.background = 'transparent';
+                }}
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+
+          {/* Desktop CTA */}
+          <div className="hidden-mobile" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Link
+              href="https://app.conversionops.in/login"
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: 'var(--text-3)',
                 textDecoration: 'none',
-                transition: 'color 0.15s',
+                padding: '8px 10px',
+                transition: 'color 0.2s',
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-2)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-3)'; }}
             >
-              {item.label}
-            </a>
-          ))}
-        </div>
+              Sign in
+            </Link>
+            <Link
+              href="/book"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                height: 36,
+                padding: '0 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 100,
+                background: 'linear-gradient(180deg, var(--accent-soft), var(--accent) 60%, var(--accent-2))',
+                color: '#0a0a0b',
+                textDecoration: 'none',
+                border: '1px solid rgba(0,0,0,0.15)',
+                boxShadow: '0 4px 14px rgba(232,255,71,0.25), inset 0 1px 0 rgba(255,255,255,0.45)',
+                transition: 'transform 0.2s var(--ease-out-quart), box-shadow 0.2s',
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLAnchorElement;
+                el.style.transform = 'translateY(-1px)';
+                el.style.boxShadow = '0 8px 24px rgba(232,255,71,0.40), inset 0 1px 0 rgba(255,255,255,0.50)';
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLAnchorElement;
+                el.style.transform = 'translateY(0)';
+                el.style.boxShadow = '0 4px 14px rgba(232,255,71,0.25), inset 0 1px 0 rgba(255,255,255,0.45)';
+              }}
+            >
+              Get started
+              <Icon name="arrow-right" size={14} stroke={2} />
+            </Link>
+          </div>
 
-        {/* Desktop CTA */}
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: 16 }}
-          className="hidden-mobile"
-        >
-          <Link
-            href="https://app.conversionops.in/login"
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label="Toggle menu"
+            aria-expanded={menuOpen}
+            className="show-mobile"
             style={{
-              fontSize: 14,
-              color: 'var(--text-3)',
-              textDecoration: 'none',
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-3)'; }}
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/book"
-            style={{
-              height: 36,
-              padding: '0 18px',
-              fontSize: 14,
-              fontWeight: 600,
-              borderRadius: 8,
-              background: 'var(--accent)',
-              color: '#000',
-              textDecoration: 'none',
-              display: 'inline-flex',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--border-light)',
+              cursor: 'pointer',
+              padding: 0,
+              width: 38,
+              height: 38,
+              borderRadius: '50%',
+              color: 'var(--text)',
+              display: 'flex',
               alignItems: 'center',
-              transition: 'background 0.15s, transform 0.15s',
-            }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              el.style.background = 'var(--accent-hover)';
-              el.style.transform = 'scale(1.02)';
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLAnchorElement;
-              el.style.background = 'var(--accent)';
-              el.style.transform = 'scale(1)';
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: 4,
             }}
           >
-            Get Started
-          </Link>
-        </div>
-
-        {/* Mobile hamburger */}
-        <button
-          onClick={() => setMenuOpen(o => !o)}
-          aria-label="Toggle menu"
-          aria-expanded={menuOpen}
-          className="show-mobile"
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 8,
-            color: 'var(--text-2)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 5,
-          }}
-        >
-          <span
-            style={{
-              display: 'block',
-              width: 20,
-              height: 1.5,
-              background: 'currentColor',
-              borderRadius: 1,
-              transition: 'transform 0.2s, opacity 0.2s',
-              transform: menuOpen ? 'translateY(6.5px) rotate(45deg)' : 'none',
-            }}
-          />
-          <span
-            style={{
-              display: 'block',
-              width: 20,
-              height: 1.5,
-              background: 'currentColor',
-              borderRadius: 1,
-              transition: 'opacity 0.2s',
-              opacity: menuOpen ? 0 : 1,
-            }}
-          />
-          <span
-            style={{
-              display: 'block',
-              width: 20,
-              height: 1.5,
-              background: 'currentColor',
-              borderRadius: 1,
-              transition: 'transform 0.2s, opacity 0.2s',
-              transform: menuOpen ? 'translateY(-6.5px) rotate(-45deg)' : 'none',
-            }}
-          />
-        </button>
-      </nav>
+            <span
+              style={{
+                display: 'block',
+                width: 16,
+                height: 1.5,
+                background: 'currentColor',
+                borderRadius: 1,
+                transition: 'all 0.3s var(--ease-out-quart)',
+                transform: menuOpen ? 'translateY(2.7px) rotate(45deg)' : 'none',
+              }}
+            />
+            <span
+              style={{
+                display: 'block',
+                width: 16,
+                height: 1.5,
+                background: 'currentColor',
+                borderRadius: 1,
+                transition: 'all 0.3s var(--ease-out-quart)',
+                transform: menuOpen ? 'translateY(-2.8px) rotate(-45deg)' : 'none',
+              }}
+            />
+          </button>
+        </nav>
+      </header>
 
       {/* Mobile drawer */}
       {menuOpen && (
         <div
-          className="animate-slide-down"
+          className="show-mobile animate-fade-in"
           style={{
-            borderTop: '1px solid var(--border)',
-            background: 'rgba(10,10,11,0.97)',
-            padding: '16px 24px 24px',
+            position: 'fixed',
+            inset: 0,
+            top: 80,
+            zIndex: 99,
+            background: 'rgba(7,7,10,0.96)',
+            backdropFilter: 'blur(24px)',
+            padding: '32px 24px',
             display: 'flex',
             flexDirection: 'column',
             gap: 4,
           }}
         >
-          {NAV_LINKS.map(item => (
+          {NAV_LINKS.map((item, i) => (
             <a
               key={item.href}
               href={item.href}
               onClick={() => setMenuOpen(false)}
+              className="animate-fade-up"
               style={{
-                fontSize: 16,
-                color: 'var(--text-2)',
+                animationDelay: `${i * 60}ms`,
+                fontFamily: "'DM Serif Display', Georgia, serif",
+                fontStyle: 'italic',
+                fontSize: 28,
+                color: 'var(--text)',
                 textDecoration: 'none',
-                padding: '12px 0',
+                padding: '14px 0',
                 borderBottom: '1px solid var(--border)',
+                letterSpacing: '-0.02em',
               }}
             >
               {item.label}
             </a>
           ))}
           <Link
-            href="/book"
+            href="https://app.conversionops.in/login"
             onClick={() => setMenuOpen(false)}
+            className="animate-fade-up"
             style={{
-              marginTop: 16,
-              height: 44,
-              borderRadius: 8,
-              background: 'var(--accent)',
-              color: '#000',
-              fontWeight: 600,
+              animationDelay: '200ms',
               fontSize: 15,
+              color: 'var(--text-2)',
               textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              padding: '14px 0',
+              borderBottom: '1px solid var(--border)',
             }}
           >
-            Get Started
+            Sign in
+          </Link>
+          <Link
+            href="/book"
+            onClick={() => setMenuOpen(false)}
+            className="btn-primary animate-fade-up"
+            style={{
+              animationDelay: '260ms',
+              marginTop: 24,
+              width: '100%',
+              justifyContent: 'center',
+              height: 56,
+              fontSize: 16,
+            }}
+          >
+            Get started
+            <Icon name="arrow-right" size={16} stroke={2} />
           </Link>
         </div>
       )}
 
       <style>{`
-        @media (min-width: 768px) { .show-mobile { display: none !important; } }
-        @media (max-width: 767px) { .hidden-mobile { display: none !important; } }
+        @media (min-width: 880px) { .show-mobile { display: none !important; } }
+        @media (max-width: 879px) { .hidden-mobile { display: none !important; } }
       `}</style>
-    </header>
+    </>
   );
 }

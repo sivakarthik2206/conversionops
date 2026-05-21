@@ -1,235 +1,320 @@
 'use client';
-import { useEffect, useRef } from 'react';
 
-const PAINS = [
+import { Reveal } from '@/components/Reveal';
+import { Icon } from '@/components/Icon';
+
+type IconName = Parameters<typeof Icon>[0]['name'];
+
+interface Pain {
+  num: string;
+  icon: IconName;
+  title: string;
+  stat: string;
+  statLabel: string;
+  desc: string;
+}
+
+const PAINS: Pain[] = [
   {
     num: '01',
-    icon: '⏱',
-    title: '5-minute rule — broken',
+    icon: 'clock',
+    title: 'The five-minute rule, broken every day',
     stat: '6×',
-    desc: 'Leads are 6× more likely to qualify if contacted within 5 minutes. Most agents take 5 hours.',
+    statLabel: 'more qualified',
+    desc: 'Leads are 6× more likely to qualify when contacted within five minutes. The median agent takes over five hours.',
   },
   {
     num: '02',
-    icon: '🌙',
-    title: '3am Zillow leads',
+    icon: 'moon',
+    title: 'The 3am Zillow lead nobody answers',
     stat: '40%',
-    desc: '40% of inbound leads arrive outside business hours. Zero agents awake. Zero follow-up.',
+    statLabel: 'arrive off-hours',
+    desc: 'Four in ten inbound leads come in outside business hours. Zero agents awake. Zero follow-up. Zero deals.',
   },
   {
     num: '03',
-    icon: '📵',
-    title: 'Missed calls → lost deals',
-    stat: '15+hrs',
-    desc: 'Average agent takes over 15 hours to respond to a missed call. The buyer is gone in 30 minutes.',
+    icon: 'phone-off',
+    title: 'Missed calls become missed commissions',
+    stat: '15hr',
+    statLabel: 'avg callback',
+    desc: 'The average agent takes more than 15 hours to return a missed call. The buyer is gone in 30 minutes.',
   },
   {
     num: '04',
-    icon: '🏃',
-    title: 'Competitor responded first',
+    icon: 'runner',
+    title: 'Your competitor responded first',
     stat: '89%',
-    desc: '89% of buyers choose the first agent who responds. Your competitors know this. Do you?',
+    statLabel: 'pick the first',
+    desc: '89% of buyers choose the first agent who responds. Your competitors already know this. Do you?',
   },
   {
     num: '05',
-    icon: '💸',
-    title: 'Revenue leaking silently',
+    icon: 'cash',
+    title: 'Silent revenue, leaking 24/7',
     stat: '$47k',
-    desc: 'Average commission lost per year to a competitor who answered 10 minutes faster.',
+    statLabel: 'lost / year',
+    desc: 'Average annual commission lost to the agent who answered ten minutes faster than you did.',
   },
   {
     num: '06',
-    icon: '🤖',
-    title: 'ISA salaries don\'t scale',
+    icon: 'cpu',
+    title: 'Your ISA salary doesn’t scale',
     stat: '$55k',
-    desc: '$55k/year ISA salary — and they still sleep, take sick days, and miss leads on weekends.',
+    statLabel: 'salary, with gaps',
+    desc: '$55k a year for an ISA who still sleeps, takes weekends off, calls in sick, and quits in eighteen months.',
   },
 ];
 
 export default function PainPoints() {
-  const gridRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid) return;
-
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            (entry.target as HTMLElement).style.opacity = '1';
-            (entry.target as HTMLElement).style.transform = 'translateY(0)';
-          }
-        });
-      },
-      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
-    );
-
-    const cards = grid.querySelectorAll<HTMLElement>('[data-pain]');
-    cards.forEach(card => observer.observe(card));
-
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <section
       style={{
-        padding: '120px 24px',
+        padding: 'clamp(80px, 12vw, 160px) 0',
         background: 'var(--bg)',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      {/* Top hairline */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '15%',
+          right: '15%',
+          height: 1,
+          background: 'linear-gradient(90deg, transparent, var(--border-strong), transparent)',
+        }}
+      />
+
+      {/* Subtle red wash */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '20%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '70%',
+          height: '50%',
+          background: 'radial-gradient(ellipse, rgba(255,92,92,0.06) 0%, transparent 70%)',
+          filter: 'blur(40px)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div className="container-page" style={{ position: 'relative' }}>
         {/* Section header */}
-        <div style={{ textAlign: 'center', marginBottom: 72 }}>
-          <p
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              color: 'var(--red)',
-              marginBottom: 16,
-            }}
-          >
-            The Revenue Leak
-          </p>
-          <h2
-            style={{
-              fontFamily: "'DM Serif Display', Georgia, serif",
-              fontSize: 'clamp(36px, 5vw, 48px)',
-              lineHeight: 1.1,
-              color: 'var(--text)',
-              letterSpacing: '-0.02em',
-              margin: 0,
-            }}
-          >
-            Your leads are leaking revenue
-          </h2>
-          <p
-            style={{
-              marginTop: 16,
-              fontSize: 18,
-              color: 'var(--text-2)',
-              maxWidth: 520,
-              marginLeft: 'auto',
-              marginRight: 'auto',
-              lineHeight: 1.6,
-            }}
-          >
-            Real estate agents lose deals before they even start.
-          </p>
-        </div>
+        <Reveal>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, marginBottom: 80, textAlign: 'center' }}>
+            <span
+              className="eyebrow"
+              style={{
+                color: 'var(--red)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)', boxShadow: '0 0 8px var(--red)' }} />
+              The revenue leak
+            </span>
+            <h2
+              className="serif t-h1"
+              style={{
+                color: 'var(--text)',
+                margin: 0,
+                maxWidth: 760,
+                fontWeight: 400,
+              }}
+            >
+              Your leads are quietly leaking{' '}
+              <span style={{ fontStyle: 'italic', color: 'var(--red)', fontFamily: "'Instrument Serif', serif" }}>
+                revenue
+              </span>
+              .
+            </h2>
+            <p style={{ fontSize: 17, color: 'var(--text-2)', maxWidth: 540, lineHeight: 1.55, margin: 0 }}>
+              Six structural reasons real estate agents lose deals before they even start &mdash; and why throwing more humans at the problem stopped working in 2019.
+            </p>
+          </div>
+        </Reveal>
 
         {/* Grid */}
         <div
-          ref={gridRef}
+          className="pain-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            gap: 16,
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 1,
+            background: 'var(--border)',
+            border: '1px solid var(--border)',
+            borderRadius: 20,
+            overflow: 'hidden',
           }}
         >
           {PAINS.map((pain, i) => (
-            <div
-              key={pain.num}
-              data-pain="true"
-              style={{
-                background: 'var(--bg-2)',
-                border: '1px solid rgba(255,71,71,0.12)',
-                borderRadius: 12,
-                padding: 28,
-                opacity: 0,
-                transform: 'translateY(20px)',
-                transition: `opacity 0.5s ease, transform 0.5s ease, border-color 0.2s ease, box-shadow 0.2s ease`,
-                transitionDelay: `${i * 80}ms`,
-                cursor: 'default',
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLElement;
-                el.style.borderColor = 'rgba(255,71,71,0.28)';
-                el.style.transform = 'translateY(-4px)';
-                el.style.boxShadow = '0 8px 24px rgba(255,71,71,0.08)';
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLElement;
-                el.style.borderColor = 'rgba(255,71,71,0.12)';
-                el.style.transform = 'translateY(0)';
-                el.style.boxShadow = 'none';
-              }}
-            >
-              {/* Number */}
-              <div
-                style={{
-                  fontFamily: "'DM Serif Display', Georgia, serif",
-                  fontSize: 48,
-                  lineHeight: 1,
-                  color: 'rgba(255,71,71,0.15)',
-                  marginBottom: 12,
-                  letterSpacing: '-0.02em',
-                  userSelect: 'none',
-                }}
-              >
-                {pain.num}
-              </div>
-
-              {/* Icon circle */}
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '50%',
-                  background: 'var(--red-dim)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 18,
-                  marginBottom: 16,
-                }}
-              >
-                {pain.icon}
-              </div>
-
-              {/* Title */}
-              <h3
-                style={{
-                  fontSize: 16,
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                  margin: '0 0 8px',
-                }}
-              >
-                {pain.title}
-              </h3>
-
-              {/* Stat */}
-              <div
-                style={{
-                  fontFamily: "'DM Serif Display', Georgia, serif",
-                  fontSize: 28,
-                  lineHeight: 1,
-                  color: 'var(--red)',
-                  marginBottom: 10,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {pain.stat}
-              </div>
-
-              {/* Description */}
-              <p
-                style={{
-                  fontSize: 13,
-                  color: 'var(--text-2)',
-                  lineHeight: 1.65,
-                  margin: 0,
-                }}
-              >
-                {pain.desc}
-              </p>
-            </div>
+            <Reveal key={pain.num} delay={((i % 3) + 1) as 1 | 2 | 3}>
+              <PainCard pain={pain} />
+            </Reveal>
           ))}
         </div>
+
+        {/* Bottom transition line */}
+        <Reveal delay={2}>
+          <div style={{ marginTop: 64, textAlign: 'center' }}>
+            <p style={{ fontSize: 15, color: 'var(--text-3)', margin: 0 }}>
+              You can&apos;t out-hire this problem.{' '}
+              <span style={{ color: 'var(--text)', fontWeight: 500 }}>You have to out-automate it.</span>
+            </p>
+          </div>
+        </Reveal>
       </div>
+
+      <style>{`
+        @media (max-width: 900px) { .pain-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 560px) { .pain-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
     </section>
+  );
+}
+
+function PainCard({ pain }: { pain: Pain }) {
+  return (
+    <div
+      className="pain-card"
+      style={{
+        background: 'var(--bg)',
+        padding: '36px 32px',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
+        minHeight: 280,
+        transition: 'background 0.4s var(--ease-soft)',
+        cursor: 'default',
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLElement;
+        el.style.background = 'linear-gradient(180deg, var(--bg-2), var(--bg))';
+        const num = el.querySelector<HTMLElement>('[data-num]');
+        if (num) {
+          num.style.color = 'rgba(255,92,92,0.30)';
+          num.style.transform = 'translateY(-2px)';
+        }
+        const iconWrap = el.querySelector<HTMLElement>('[data-iconwrap]');
+        if (iconWrap) {
+          iconWrap.style.borderColor = 'rgba(255,92,92,0.35)';
+          iconWrap.style.background = 'rgba(255,92,92,0.10)';
+          iconWrap.style.color = 'var(--red)';
+        }
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLElement;
+        el.style.background = 'var(--bg)';
+        const num = el.querySelector<HTMLElement>('[data-num]');
+        if (num) {
+          num.style.color = 'rgba(255,255,255,0.06)';
+          num.style.transform = 'translateY(0)';
+        }
+        const iconWrap = el.querySelector<HTMLElement>('[data-iconwrap]');
+        if (iconWrap) {
+          iconWrap.style.borderColor = 'var(--border)';
+          iconWrap.style.background = 'var(--bg-3)';
+          iconWrap.style.color = 'var(--text-3)';
+        }
+      }}
+    >
+      {/* Big number watermark */}
+      <span
+        data-num
+        className="serif"
+        style={{
+          position: 'absolute',
+          top: 16,
+          right: 24,
+          fontSize: 90,
+          lineHeight: 0.9,
+          color: 'rgba(255,255,255,0.06)',
+          userSelect: 'none',
+          transition: 'color 0.4s var(--ease-soft), transform 0.4s var(--ease-out-quart)',
+          fontWeight: 400,
+          letterSpacing: '-0.04em',
+        }}
+      >
+        {pain.num}
+      </span>
+
+      {/* Icon */}
+      <div
+        data-iconwrap
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: 'var(--bg-3)',
+          border: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-3)',
+          transition: 'all 0.4s var(--ease-soft)',
+        }}
+      >
+        <Icon name={pain.icon} size={20} stroke={1.7} />
+      </div>
+
+      {/* Title */}
+      <h3
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          color: 'var(--text)',
+          margin: 0,
+          lineHeight: 1.3,
+          letterSpacing: '-0.01em',
+        }}
+      >
+        {pain.title}
+      </h3>
+
+      {/* Stat row */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span
+          className="serif"
+          style={{
+            fontSize: 36,
+            lineHeight: 1,
+            color: 'var(--red)',
+            fontWeight: 400,
+          }}
+        >
+          {pain.stat}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            color: 'var(--text-4)',
+            fontFamily: "'JetBrains Mono', monospace",
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          {pain.statLabel}
+        </span>
+      </div>
+
+      {/* Description */}
+      <p
+        style={{
+          fontSize: 14,
+          color: 'var(--text-2)',
+          lineHeight: 1.6,
+          margin: 0,
+          flex: 1,
+        }}
+      >
+        {pain.desc}
+      </p>
+    </div>
   );
 }

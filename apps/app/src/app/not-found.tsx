@@ -1,46 +1,75 @@
 import Link from 'next/link';
+import { Icon } from '@/components/Icon';
 
 export default function NotFound() {
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center',
-      padding: 32,
-    }}>
-      <h1 style={{
-        fontFamily: 'DM Serif Display, serif',
-        fontSize: 120,
-        fontWeight: 400,
-        color: 'var(--text-4)',
-        lineHeight: 1,
-        margin: 0,
-      }}>
-        404
-      </h1>
-      <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 16, marginBottom: 8 }}>
-        Page not found
-      </h2>
-      <p style={{ color: 'var(--text-2)', fontSize: 16, marginBottom: 32, maxWidth: 400 }}>
-        The page you&apos;re looking for doesn&apos;t exist or has been moved.
-      </p>
-      <Link
-        href="/"
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        padding: 32,
+        background: 'var(--bg)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
         style={{
-          background: 'var(--accent)',
-          color: '#000',
-          textDecoration: 'none',
-          padding: '12px 28px',
-          borderRadius: 10,
-          fontWeight: 700,
-          fontSize: 15,
+          position: 'absolute',
+          inset: 0,
+          background:
+            'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(232,255,71,0.06) 0%, transparent 65%)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <h1
+        className="serif"
+        style={{
+          fontSize: 'clamp(120px, 22vw, 200px)',
+          color: 'transparent',
+          WebkitTextStroke: '1px var(--border-light)',
+          lineHeight: 0.85,
+          margin: 0,
+          fontStyle: 'italic',
+          fontFamily: "'Instrument Serif', serif",
+          letterSpacing: '-0.04em',
+          position: 'relative',
         }}
       >
-        Go home
-      </Link>
+        404
+      </h1>
+
+      <h2
+        className="serif"
+        style={{
+          fontSize: 'clamp(24px, 3vw, 32px)',
+          color: 'var(--text)',
+          margin: '8px 0 12px',
+          fontWeight: 400,
+          letterSpacing: '-0.025em',
+          position: 'relative',
+        }}
+      >
+        Page not found.
+      </h2>
+      <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 28px', maxWidth: 380, lineHeight: 1.55, position: 'relative' }}>
+        The page you&apos;re looking for doesn&apos;t exist or has moved. Let&apos;s get you back home.
+      </p>
+
+      <div style={{ display: 'flex', gap: 10, position: 'relative' }}>
+        <Link href="/" className="btn-primary">
+          <Icon name="home" size={14} stroke={1.8} />
+          Go home
+        </Link>
+        <Link href="/conversations" className="btn-ghost">
+          View conversations
+        </Link>
+      </div>
     </div>
   );
 }

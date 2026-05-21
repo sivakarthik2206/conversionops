@@ -16,15 +16,24 @@ export class ConversationMemoryManager {
    */
   async buildContext(
     conversationId: string,
+    workspaceId: string,
     prisma: PrismaClient,
   ): Promise<ConversationContext> {
+    // Tenant scope on every read so AI cannot see another workspace's memory.
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, deletedAt: null },
+      where: { id: conversationId, workspaceId, deletedAt: null },
       select: { contextSummary: true },
     });
 
+    if (!conversation) {
+      // Either the conversation doesn't exist or it belongs to a different
+      // workspace. Either way, return empty context — never fall back to
+      // unscoped reads.
+      return { messages: [], summary: null };
+    }
+
     const allMessages = await prisma.message.findMany({
-      where: { conversationId, deletedAt: null },
+      where: { conversationId, workspaceId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
       select: { id: true, role: true, content: true, createdAt: true },
     });
@@ -41,7 +50,7 @@ export class ConversationMemoryManager {
 
     const last12 = mapped.slice(-MAX_CONTEXT_MESSAGES);
 
-    if (conversation?.contextSummary) {
+    if (conversation.contextSummary) {
       return { messages: last12, summary: conversation.contextSummary };
     }
 
@@ -50,8 +59,10 @@ export class ConversationMemoryManager {
       const summaryResult = await this.generateSummary(olderMessages);
 
       if (summaryResult) {
-        await prisma.conversation.update({
-          where: { id: conversationId },
+        // updateMany with workspaceId predicate — never widens scope even if
+        // a future refactor passes a foreign conversationId.
+        await prisma.conversation.updateMany({
+          where: { id: conversationId, workspaceId },
           data: {
             contextSummary: summaryResult,
             summarisedUpTo: allMessages[allMessages.length - MAX_CONTEXT_MESSAGES - 1]?.id ?? null,

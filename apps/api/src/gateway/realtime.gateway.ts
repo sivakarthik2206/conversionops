@@ -14,6 +14,7 @@ import Redis from 'ioredis';
 import { verifyToken } from '@conversionops/auth';
 import { logger } from '@conversionops/observability';
 import { WorkspaceRoomsService } from './workspace.rooms';
+import { PrismaService } from '../modules/prisma/prisma.service';
 
 interface JoinConversationPayload {
   conversationId: string;
@@ -31,7 +32,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly rooms: WorkspaceRoomsService) {}
+  constructor(
+    private readonly rooms: WorkspaceRoomsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async afterInit(server: Server): Promise<void> {
     this.rooms.setServer(server);
@@ -81,17 +85,35 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   }
 
   @SubscribeMessage('join:conversation')
-  handleJoinConversation(
+  async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: JoinConversationPayload,
-  ): void {
+  ): Promise<void> {
     const clientWorkspaceId = client.data['workspaceId'] as string | undefined;
     if (!clientWorkspaceId || clientWorkspaceId !== payload.workspaceId) {
       client.emit('error', { message: 'Unauthorized: workspace mismatch', code: 'TENANT_LEAKAGE' });
       return;
     }
 
-    void client.join(`conv:${payload.conversationId}`);
+    // Verify the conversation actually belongs to this workspace before
+    // letting the client subscribe. Without this, a client could subscribe
+    // to a conversationId from another workspace (their own workspaceId in
+    // the payload satisfies the prior check) and receive any later events
+    // emitted on that conversation.
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: payload.conversationId, workspaceId: clientWorkspaceId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!conversation) {
+      logger.warn(
+        { clientId: client.id, conversationId: payload.conversationId, workspaceId: clientWorkspaceId },
+        'WebSocket: join:conversation rejected — conversation not found in workspace',
+      );
+      client.emit('error', { message: 'Conversation not found', code: 'NOT_FOUND' });
+      return;
+    }
+
+    void client.join(this.rooms.getConversationRoom(clientWorkspaceId, payload.conversationId));
     logger.debug(
       { clientId: client.id, conversationId: payload.conversationId },
       'WebSocket: joined conversation room',
@@ -103,7 +125,9 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { conversationId: string },
   ): void {
-    void client.leave(`conv:${payload.conversationId}`);
+    const clientWorkspaceId = client.data['workspaceId'] as string | undefined;
+    if (!clientWorkspaceId) return;
+    void client.leave(this.rooms.getConversationRoom(clientWorkspaceId, payload.conversationId));
   }
 }
 

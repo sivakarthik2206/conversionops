@@ -85,8 +85,12 @@ export class ConversationRepository {
     workspaceId: string,
     data: Prisma.ConversationUpdateInput,
   ): Promise<Conversation | null> {
-    const existing = await this.findById(id, workspaceId);
-    if (!existing) return null;
-    return this.prisma.conversation.update({ where: { id }, data });
+    // updateMany with (id, workspaceId) predicate — race-safe vs. find-then-update.
+    const result = await this.prisma.conversation.updateMany({
+      where: { id, workspaceId, deletedAt: null },
+      data: data as Prisma.ConversationUncheckedUpdateManyInput,
+    });
+    if (result.count === 0) return null;
+    return this.findById(id, workspaceId);
   }
 }

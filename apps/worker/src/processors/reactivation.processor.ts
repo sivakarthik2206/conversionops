@@ -67,7 +67,16 @@ export class ReactivationProcessor {
         workspace.twilioNumber ?? process.env['TWILIO_PHONE_NUMBER'] ?? '',
       );
 
-      const smsResult = await twilio.sendSMS({ to: lead.phone, body: message, workspaceId }, this.prisma);
+      const smsResult = await twilio.sendSMS(
+        {
+          to: lead.phone,
+          body: message,
+          workspaceId,
+          purpose: 'customer',
+          timezone: workspace.timezone,
+        },
+        this.prisma,
+      );
 
       if (!smsResult.ok) {
         logger.error({ err: smsResult.error, leadId }, 'reactivation: SMS failed');

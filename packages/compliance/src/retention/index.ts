@@ -51,55 +51,71 @@ export async function enforceRetentionPolicies(
         optedOutAt: { lt: thirtyDaysAgo },
         deletedAt: null,
       },
-      select: { leadId: true, phone: true },
+      select: { workspaceId: true, leadId: true, phone: true },
     });
 
-    const leadIds = [...new Set(
-      optedOutConsents
-        .map(c => c.leadId)
-        .filter((id): id is string => id !== null),
-    )];
+    // Group opt-outs by workspace. A phone number that exists in workspace A
+    // and workspace B independently must only be anonymised in the workspace
+    // where the opt-out was recorded — otherwise opting out in one workspace
+    // erases an unrelated lead in another (cross-tenant data mutation).
+    const byWorkspace = new Map<string, { leadIds: Set<string>; phones: Set<string> }>();
+    for (const c of optedOutConsents) {
+      let bucket = byWorkspace.get(c.workspaceId);
+      if (!bucket) {
+        bucket = { leadIds: new Set(), phones: new Set() };
+        byWorkspace.set(c.workspaceId, bucket);
+      }
+      if (c.leadId) bucket.leadIds.add(c.leadId);
+      if (c.phone) bucket.phones.add(c.phone);
+    }
 
-    const phones = [...new Set(
-      optedOutConsents
-        .map(c => c.phone)
-        .filter((p): p is string => p !== null),
-    )];
+    let totalAnonymised = 0;
 
-    const leadsToAnonymise = await prisma.lead.findMany({
-      where: {
-        piiDeletedAt: null,
-        deletedAt: null,
-        OR: [
-          ...(leadIds.length > 0 ? [{ id: { in: leadIds } }] : []),
-          ...(phones.length > 0 ? [{ phone: { in: phones } }] : []),
-        ],
-      },
-      select: { id: true },
-    });
+    for (const [workspaceId, bucket] of byWorkspace) {
+      const leadIds = [...bucket.leadIds];
+      const phones = [...bucket.phones];
+      if (leadIds.length === 0 && phones.length === 0) continue;
 
-    if (leadsToAnonymise.length > 0) {
+      const leadsToAnonymise = await prisma.lead.findMany({
+        where: {
+          workspaceId,
+          piiDeletedAt: null,
+          deletedAt: null,
+          OR: [
+            ...(leadIds.length > 0 ? [{ id: { in: leadIds } }] : []),
+            ...(phones.length > 0 ? [{ phone: { in: phones } }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (leadsToAnonymise.length === 0) continue;
+
       const ids = leadsToAnonymise.map(l => l.id);
 
       await prisma.lead.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, workspaceId },
         data: { phone: null, email: null, name: null, fullName: null, piiDeletedAt: now },
       });
 
       const conversations = await prisma.conversation.findMany({
-        where: { leadId: { in: ids } },
+        where: { leadId: { in: ids }, workspaceId },
         select: { id: true },
       });
 
       if (conversations.length > 0) {
         await prisma.message.updateMany({
-          where: { conversationId: { in: conversations.map(c => c.id) } },
+          where: { conversationId: { in: conversations.map(c => c.id) }, workspaceId },
           data: { content: '[PII ANONYMISED]' },
         });
       }
 
-      report.anonymisedLeads = leadsToAnonymise.length;
-      logger.info({ count: leadsToAnonymise.length }, 'retention: anonymised opted-out leads');
+      totalAnonymised += leadsToAnonymise.length;
+    }
+
+    report.anonymisedLeads = totalAnonymised;
+    if (totalAnonymised > 0) {
+      logger.info({ count: totalAnonymised, workspaces: byWorkspace.size }, 'retention: anonymised opted-out leads');
     }
   } catch (err: unknown) {
     logger.error({ err }, 'retention: failed to anonymise opted-out leads');

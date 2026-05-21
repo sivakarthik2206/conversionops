@@ -5,10 +5,45 @@ import { ConsentChannel, ConsentStatus } from '@conversionops/db';
 import { TCPAViolationError, ExternalServiceError } from '@conversionops/sdk-standards';
 import type { Result } from '@conversionops/types';
 
+/**
+ * TCPA purpose discriminator.
+ * - 'customer'  → outbound to a lead. Requires OPTED_IN ConsentRecord AND not-quiet-hours.
+ * - 'internal'  → operational alert to a workspace user (agent/admin). Skips consent check
+ *                 (workspace users have business relationship, not TCPA-protected for
+ *                 transactional alerts) but still rejects if an OPTED_OUT record exists.
+ *                 Internal sends ignore quiet hours (alerts are time-sensitive).
+ */
+export type SendSMSPurpose = 'customer' | 'internal';
+
 export interface SendSMSOptions {
   to: string;
   body: string;
   workspaceId: string;
+  purpose: SendSMSPurpose;
+  /** IANA timezone for quiet-hours check. Required when purpose === 'customer'. */
+  timezone?: string;
+}
+
+const QUIET_HOURS_START = 21;
+const QUIET_HOURS_END = 8;
+
+/**
+ * Returns true if the given timezone is currently within quiet hours (21:00–08:00 local).
+ * Fails SAFE — invalid timezone returns true (blocks send).
+ */
+function isWithinQuietHours(timezone: string): boolean {
+  try {
+    const hourStr = new Date().toLocaleString('en-US', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: timezone,
+    });
+    const hour = parseInt(hourStr, 10);
+    if (isNaN(hour)) return true;
+    return hour >= QUIET_HOURS_START || hour < QUIET_HOURS_END;
+  } catch {
+    return true;
+  }
 }
 
 export class TwilioClient {
@@ -21,20 +56,65 @@ export class TwilioClient {
   }
 
   /**
-   * Sends an SMS message. Performs TCPA consent check when prisma is provided.
+   * Sends an SMS. Enforces the TCPA pre-send checklist inside the wrapper so that
+   * compliance cannot be bypassed by a caller forgetting to gate upstream.
+   *
+   * Customer purpose:
+   *   • requires an OPTED_IN ConsentRecord (no opt-out, not soft-deleted)
+   *   • requires not-quiet-hours in the supplied timezone
+   * Internal purpose:
+   *   • rejects if an OPTED_OUT ConsentRecord exists for the recipient
+   *   • ignores quiet hours (operational alerts)
+   *
    * @returns Result<messageSid> — never throws
    */
-  async sendSMS(options: SendSMSOptions, prisma?: PrismaClient): Promise<Result<string>> {
-    const { to, body, workspaceId } = options;
+  async sendSMS(options: SendSMSOptions, prisma: PrismaClient): Promise<Result<string>> {
+    const { to, body, workspaceId, purpose, timezone } = options;
 
-    if (prisma) {
-      const consentRecord = await prisma.consentRecord.findFirst({
-        where: { phone: to, workspaceId, channel: ConsentChannel.SMS, status: ConsentStatus.OPTED_IN },
+    if (purpose === 'customer') {
+      if (!timezone) {
+        return {
+          ok: false,
+          error: new TCPAViolationError(to, 'Customer SMS requires timezone for quiet-hours check'),
+        };
+      }
+      if (isWithinQuietHours(timezone)) {
+        return {
+          ok: false,
+          error: new TCPAViolationError(to, `Quiet hours in ${timezone}`),
+        };
+      }
+      const consent = await prisma.consentRecord.findFirst({
+        where: {
+          phone: to,
+          workspaceId,
+          channel: ConsentChannel.SMS,
+          status: ConsentStatus.OPTED_IN,
+          optedOutAt: null,
+          deletedAt: null,
+        },
       });
-      if (!consentRecord) {
+      if (!consent) {
         return {
           ok: false,
           error: new TCPAViolationError(to, 'No OPTED_IN consent record found'),
+        };
+      }
+    } else {
+      // internal — block if recipient explicitly opted out
+      const optOut = await prisma.consentRecord.findFirst({
+        where: {
+          phone: to,
+          workspaceId,
+          channel: ConsentChannel.SMS,
+          status: ConsentStatus.OPTED_OUT,
+          deletedAt: null,
+        },
+      });
+      if (optOut) {
+        return {
+          ok: false,
+          error: new TCPAViolationError(to, 'Recipient has opted out'),
         };
       }
     }

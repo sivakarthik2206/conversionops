@@ -92,7 +92,12 @@ export class NotificationProcessor {
 
     if (notifyChannel === 'SMS' && workspaceUser.user.phone) {
       const smsResult = await this.twilio.sendSMS(
-        { to: workspaceUser.user.phone, body: message, workspaceId: wid },
+        {
+          to: workspaceUser.user.phone,
+          body: message,
+          workspaceId: wid,
+          purpose: 'internal',
+        },
         this.prisma,
       );
       sent = smsResult.ok;
