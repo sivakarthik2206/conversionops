@@ -1,3 +1,9 @@
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config(); // fallback
+
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { logger } from '@conversionops/observability';
