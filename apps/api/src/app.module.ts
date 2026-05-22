@@ -1,6 +1,23 @@
-import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, RequestMethod, Injectable } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import type { ExecutionContext } from '@nestjs/common';
+import type { Request } from 'express';
+
+// Webhook and health paths must never be rate-limited — Twilio bursts legitimately
+// and health probes run every 30s from Cloud Run.
+const THROTTLE_EXEMPT_PREFIXES = ['/v1/webhooks/', '/v1/health', '/v1/metrics'];
+
+@Injectable()
+class AppThrottlerGuard extends ThrottlerGuard {
+  protected async shouldSkip(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request>();
+    const path = request.path ?? '';
+    if (THROTTLE_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
+    return super.shouldSkip(context);
+  }
+}
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -29,6 +46,10 @@ import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.we
       isGlobal: true,
       envFilePath: ['.env.local', '.env', '../../.env.local', '../../.env'],
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 120, // 120 req/min per IP for authenticated endpoints
+    }]),
     PrismaModule,
     HealthModule,
     AuthModule,
@@ -55,6 +76,10 @@ import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.we
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
     },
   ],
 })

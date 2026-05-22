@@ -6,6 +6,8 @@ import { buildQualificationPrompt } from '../prompts/qualification.prompt';
 import { buildResponsePrompt } from '../prompts/response.prompt';
 import { buildSystemPrompt } from '../prompts/system.prompt';
 import { ConversationMemoryManager } from '../memory/conversation-memory';
+import { checkQuota } from '../governance/token-budget';
+import { logger } from '@conversionops/observability';
 
 export interface QualificationResult {
   content: string;
@@ -68,6 +70,33 @@ export async function runQualificationChain(
   const systemPrompt = buildSystemPrompt(workspace);
 
   const isFirstContact = context.messages.filter((m) => m.role === 'AI').length === 0;
+
+  // Guard: Maximum conversation depth prevents runaway AI costs and infinite loops
+  if (context.totalMessageCount > 20) {
+    logger.warn({ conversationId, leadId: lead.id, workspaceId: workspace.id, depth: context.totalMessageCount }, 'ai-chain: max depth exceeded — human takeover required');
+    return { ok: false, error: new Error('Maximum conversation depth exceeded. Human takeover required.') };
+  }
+
+  // Guard: Detect stuck/repetitive AI loop — same question asked 3+ times in last 10 messages
+  if (context.totalMessageCount >= 6) {
+    const recentAiMessages = context.messages
+      .filter((m) => m.role === 'AI')
+      .slice(-5)
+      .map((m) => m.content.trim().toLowerCase().slice(0, 120));
+
+    const uniqueMessages = new Set(recentAiMessages);
+    if (recentAiMessages.length >= 3 && uniqueMessages.size <= 1) {
+      logger.warn({ conversationId, leadId: lead.id, workspaceId: workspace.id }, 'ai-chain: repetitive loop detected — aborting');
+      return { ok: false, error: new Error('AI loop detected: identical responses. Human takeover required.') };
+    }
+  }
+
+  // Guard: Explicit token budget check before Vertex AI generation
+  const quota = await checkQuota(workspace.id, prisma);
+  if (!quota.allowed) {
+    logger.warn({ workspaceId: workspace.id, used: quota.used }, 'Token quota exceeded in qualification chain');
+    return { ok: false, error: new Error('Workspace token quota exceeded.') };
+  }
 
   const userPrompt = isFirstContact
     ? buildResponsePrompt(lead, workspace)

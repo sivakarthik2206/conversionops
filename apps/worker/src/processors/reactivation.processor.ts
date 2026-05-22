@@ -83,18 +83,20 @@ export class ReactivationProcessor {
         return;
       }
 
-      // Update lead status and increment reactivation count
+      // Update lead status and increment reactivation count — workspaceId required for tenant safety
       await this.prisma.lead.update({
-        where: { id: leadId },
+        where: { id: leadId, workspaceId },
         data: {
           status: LeadStatus.REACTIVATED,
           reactivationCount: { increment: 1 },
+          lastReactivatedAt: new Date(),
+          reactivationSource: 'scheduled-reactivation',
         },
       });
 
-      // Find or create conversation
+      // Find the most recent non-completed conversation or create a new one
       const conversation = await this.prisma.conversation.findFirst({
-        where: { leadId, workspaceId, deletedAt: null },
+        where: { leadId, workspaceId, status: { not: ConversationStatus.COMPLETED }, deletedAt: null },
         orderBy: { createdAt: 'desc' },
       }) ?? await this.prisma.conversation.create({
         data: {

@@ -6,25 +6,62 @@ dotenv.config(); // fallback
 
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { logger } from '@conversionops/observability';
+import { logger, initTracing } from '@conversionops/observability';
+
+// Initialize OpenTelemetry before importing instrumented modules
+initTracing('conversionops-worker');
+
 import { WorkerModule } from './worker.module';
 
+// Required at worker startup — fail fast rather than silently process jobs incorrectly
+const REQUIRED_ENV_VARS_PROD = ['DATABASE_URL', 'REDIS_URL'];
+
+function validateRequiredEnvVars(keys: string[]): void {
+  const missing = keys.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(`Worker startup failed: missing required env vars: ${missing.join(', ')}`);
+  }
+}
+
 async function bootstrap(): Promise<void> {
+  if (process.env['NODE_ENV'] === 'production') {
+    validateRequiredEnvVars(REQUIRED_ENV_VARS_PROD);
+  }
+
   const app = await NestFactory.createApplicationContext(WorkerModule, {
     logger: false,
   });
 
-  logger.info('ConversionOps worker started');
+  logger.info({ nodeEnv: process.env['NODE_ENV'] }, 'ConversionOps worker started');
+
+  let isShuttingDown = false;
 
   const shutdown = async (signal: string): Promise<void> => {
-    logger.info({ signal }, 'Worker shutting down');
-    await app.close();
-    logger.info('Worker shutdown complete');
-    process.exit(0);
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    logger.info({ signal }, 'Worker shutting down — draining in-flight jobs (max 30s)');
+    try {
+      await app.close();
+      logger.info('Worker shutdown complete');
+    } catch (err) {
+      logger.error({ err }, 'Worker shutdown error');
+    } finally {
+      process.exit(0);
+    }
   };
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+
+  // Surface unhandled rejections — never silently swallow
+  process.on('unhandledRejection', (reason: unknown) => {
+    logger.error({ reason }, 'Unhandled promise rejection in worker');
+  });
+
+  process.on('uncaughtException', (err: Error) => {
+    logger.error({ err }, 'Uncaught exception in worker — exiting');
+    process.exit(1);
+  });
 }
 
 bootstrap().catch((err: unknown) => {

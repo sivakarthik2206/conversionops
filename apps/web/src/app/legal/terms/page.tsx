@@ -1,9 +1,9 @@
-import Navbar from '@/components/layout/Navbar';
+﻿import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { LegalShell } from '../privacy/page';
+import { LegalShell } from '@/components/legal/LegalShell';
 
 export const metadata = {
-  title: 'Terms of Service — ConversionOps',
+  title: 'Terms of Service â€” ConversionOps',
   description: 'ConversionOps terms of service and acceptable use policy.',
 };
 
@@ -65,7 +65,7 @@ export default function TermsPage() {
     <main style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       <Navbar />
       <LegalShell
-        eyebrow="Legal · Terms"
+        eyebrow="Legal Â· Terms"
         title="Terms of Service"
         updated="May 20, 2026"
         sections={SECTIONS}
@@ -74,3 +74,4 @@ export default function TermsPage() {
     </main>
   );
 }
+

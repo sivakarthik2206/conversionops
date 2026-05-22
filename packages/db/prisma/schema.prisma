@@ -361,6 +361,8 @@ model Lead {
   @@index([workspaceId, score])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, assignedWorkspaceUserId])
+  @@index([workspaceId, phone])
+  @@index([workspaceId, email])
   @@index([phone])
   @@index([email])
   @@index([deletedAt])

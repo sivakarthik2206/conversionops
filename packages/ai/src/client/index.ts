@@ -19,9 +19,19 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1024;
 const GENERATE_TIMEOUT_MS = 30_000;
 
+// Circuit breaker: open after 5 consecutive failures, reset after 60s
+const CIRCUIT_FAILURE_THRESHOLD = 5;
+const CIRCUIT_RESET_MS = 60_000;
+
+type CircuitState = 'closed' | 'open' | 'half-open';
+
 export class VertexAIClient {
   private readonly model: GenerativeModel | null;
   private readonly modelId: string;
+
+  private circuitState: CircuitState = 'closed';
+  private circuitFailures = 0;
+  private circuitOpenedAt: number | null = null;
 
   constructor() {
     const project = process.env['GOOGLE_CLOUD_PROJECT'];
@@ -43,9 +53,42 @@ export class VertexAIClient {
     });
   }
 
+  private checkCircuit(): Result<void> {
+    if (this.circuitState === 'closed') return { ok: true, value: undefined };
+
+    if (this.circuitState === 'open') {
+      const elapsed = Date.now() - (this.circuitOpenedAt ?? 0);
+      if (elapsed >= CIRCUIT_RESET_MS) {
+        this.circuitState = 'half-open';
+        return { ok: true, value: undefined };
+      }
+      return {
+        ok: false,
+        error: new ExternalServiceError('vertex-ai', 'CIRCUIT_OPEN: Gemini temporarily unavailable'),
+      };
+    }
+
+    // half-open: allow one probe
+    return { ok: true, value: undefined };
+  }
+
+  private recordSuccess(): void {
+    this.circuitFailures = 0;
+    this.circuitState = 'closed';
+    this.circuitOpenedAt = null;
+  }
+
+  private recordFailure(): void {
+    this.circuitFailures += 1;
+    if (this.circuitState === 'half-open' || this.circuitFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+      this.circuitState = 'open';
+      this.circuitOpenedAt = Date.now();
+    }
+  }
+
   /**
    * Generates a response from Gemini. Wraps all errors — never throws.
-   * Handles quota errors, safety filters, and timeout after 30s.
+   * Includes circuit breaker, content filtering, and 30s timeout.
    * @returns Result<GenerateResponse>
    */
   async generate(
@@ -56,6 +99,9 @@ export class VertexAIClient {
     if (!this.model) {
       return { ok: false, error: new ExternalServiceError('vertex-ai', 'GOOGLE_CLOUD_PROJECT not configured') };
     }
+
+    const circuitCheck = this.checkCircuit();
+    if (!circuitCheck.ok) return circuitCheck;
 
     const startMs = Date.now();
 
@@ -81,11 +127,13 @@ export class VertexAIClient {
 
       if (!candidate) {
         if (response.promptFeedback?.blockReason) {
+          // Content filtered — not a circuit-breaker failure
           return {
             ok: false,
             error: new ExternalServiceError('vertex-ai', 'CONTENT_FILTERED'),
           };
         }
+        this.recordFailure();
         return {
           ok: false,
           error: new ExternalServiceError('vertex-ai', 'No candidates in response'),
@@ -97,9 +145,15 @@ export class VertexAIClient {
         .map((p) => p.text)
         .join('');
 
+      if (!content.trim()) {
+        this.recordFailure();
+        return { ok: false, error: new ExternalServiceError('vertex-ai', 'Empty content in response') };
+      }
+
       const usage = response.usageMetadata;
       const latencyMs = Date.now() - startMs;
 
+      this.recordSuccess();
       return {
         ok: true,
         value: {
@@ -113,6 +167,7 @@ export class VertexAIClient {
       const errMessage = err instanceof Error ? err.message : String(err);
 
       if (errMessage === 'GENERATE_TIMEOUT') {
+        this.recordFailure();
         return {
           ok: false,
           error: new ExternalServiceError('vertex-ai', 'Request timed out after 30s'),
@@ -120,12 +175,16 @@ export class VertexAIClient {
       }
 
       if (errMessage.includes('RESOURCE_EXHAUSTED') || errMessage.includes('quota')) {
+        // Quota exhaustion — open circuit immediately
+        this.circuitFailures = CIRCUIT_FAILURE_THRESHOLD;
+        this.recordFailure();
         return {
           ok: false,
           error: new ExternalServiceError('vertex-ai', 'AI_QUOTA_EXCEEDED'),
         };
       }
 
+      this.recordFailure();
       return {
         ok: false,
         error: new ExternalServiceError('vertex-ai', errMessage),
@@ -134,7 +193,8 @@ export class VertexAIClient {
   }
 
   /**
-   * Generates with retry — 3 attempts with exponential backoff (1s, 2s, 4s).
+   * Generates with exponential backoff — 3 attempts (1s, 2s, 4s).
+   * Skips retry for content filtering and quota exhaustion (non-retryable).
    * @returns Result<GenerateResponse>
    */
   async generateWithRetry(
@@ -151,7 +211,9 @@ export class VertexAIClient {
 
       const errMsg = lastResult.error.message;
       const isRetryable =
-        !errMsg.includes('CONTENT_FILTERED') && !errMsg.includes('AI_QUOTA_EXCEEDED');
+        !errMsg.includes('CONTENT_FILTERED') &&
+        !errMsg.includes('AI_QUOTA_EXCEEDED') &&
+        !errMsg.includes('CIRCUIT_OPEN');
 
       if (!isRetryable || attempt === 2) break;
 
@@ -163,5 +225,10 @@ export class VertexAIClient {
 
   getModelId(): string {
     return this.modelId;
+  }
+
+  /** Returns current circuit breaker state — for health endpoint / monitoring. */
+  getCircuitState(): { state: CircuitState; failures: number } {
+    return { state: this.circuitState, failures: this.circuitFailures };
   }
 }

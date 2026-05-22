@@ -29,7 +29,7 @@ export class ConversationMemoryManager {
       // Either the conversation doesn't exist or it belongs to a different
       // workspace. Either way, return empty context — never fall back to
       // unscoped reads.
-      return { messages: [], summary: null };
+      return { messages: [], summary: null, totalMessageCount: 0 };
     }
 
     const allMessages = await prisma.message.findMany({
@@ -45,13 +45,13 @@ export class ConversationMemoryManager {
     }));
 
     if (mapped.length <= MAX_CONTEXT_MESSAGES) {
-      return { messages: mapped, summary: null };
+      return { messages: mapped, summary: null, totalMessageCount: mapped.length };
     }
 
     const last12 = mapped.slice(-MAX_CONTEXT_MESSAGES);
 
     if (conversation.contextSummary) {
-      return { messages: last12, summary: conversation.contextSummary };
+      return { messages: last12, summary: conversation.contextSummary, totalMessageCount: mapped.length };
     }
 
     if (mapped.length >= SUMMARY_TRIGGER_COUNT) {
@@ -68,11 +68,11 @@ export class ConversationMemoryManager {
             summarisedUpTo: allMessages[allMessages.length - MAX_CONTEXT_MESSAGES - 1]?.id ?? null,
           },
         });
-        return { messages: last12, summary: summaryResult };
+        return { messages: last12, summary: summaryResult, totalMessageCount: mapped.length };
       }
     }
 
-    return { messages: last12, summary: null };
+    return { messages: last12, summary: null, totalMessageCount: mapped.length };
   }
 
   /**

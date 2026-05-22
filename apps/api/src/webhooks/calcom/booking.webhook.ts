@@ -11,12 +11,13 @@ import {
 import { Request } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../../common/decorators/public.decorator';
-import { IdempotencyService } from '@conversionops/orchestration';
+import { IdempotencyService, transitionLead } from '@conversionops/orchestration';
 import { IdempotencyConflictError } from '@conversionops/sdk-standards';
 import { parseCalComWebhook } from '@conversionops/integrations';
 import { queues } from '@conversionops/orchestration';
 import { logger } from '@conversionops/observability';
 import type { Prisma } from '@conversionops/db';
+import { NotificationType } from '@conversionops/db';
 import { PrismaService } from '../../modules/prisma/prisma.service';
 
 @Controller('webhooks/calcom')
@@ -109,17 +110,37 @@ export class CalComWebhookController {
 
     if (event.triggerEvent === 'BOOKING_CREATED') {
       const attendeeEmail = event.payload.attendees[0]?.email;
-      if (!attendeeEmail) return;
+      const attendeeRaw = event.payload.attendees[0] as Record<string, unknown> | undefined;
+      const attendeePhone = typeof attendeeRaw?.['phone'] === 'string' ? attendeeRaw['phone'] : undefined;
 
-      // Tenant-scoped lead lookup — never cross workspaces.
-      const lead = await this.prisma.lead.findFirst({
-        where: { email: attendeeEmail, workspaceId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-      });
+      // BUG FIX #10: Try email lookup first, then phone fallback.
+      // Phone-only leads (common for SMS-sourced Zillow/missed-call leads) were previously
+      // orphaned because Cal.com attendees always have email, but the lead may have no email.
+      let lead = attendeeEmail
+        ? await this.prisma.lead.findFirst({
+            where: { email: attendeeEmail, workspaceId, deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+          })
+        : null;
+
+      if (!lead && attendeePhone) {
+        lead = await this.prisma.lead.findFirst({
+          where: { phone: attendeePhone, workspaceId, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
 
       if (!lead) {
-        logger.warn({ attendeeEmail, bookingUid, workspaceId }, 'calcom-webhook: no lead found for attendee in workspace');
+        logger.warn({ attendeeEmail, attendeePhone, bookingUid, workspaceId }, 'calcom-webhook: no lead found for attendee in workspace');
         return;
+      }
+
+      // BUG FIX #11: Update lead email if we matched by phone and email was missing
+      if (!lead.email && attendeeEmail) {
+        await this.prisma.lead.update({
+          where: { id: lead.id, workspaceId },
+          data: { email: attendeeEmail },
+        });
       }
 
       await this.prisma.appointment.create({
@@ -135,13 +156,37 @@ export class CalComWebhookController {
         },
       });
 
-      await queues.aiResponse.add(
-        'appointment-confirmed-notify',
-        { leadId: lead.id, workspaceId: lead.workspaceId, bookingUid },
-        { removeOnComplete: 1000 },
-      );
+      // BUG FIX #11: Transition lead status to APPOINTMENT_SCHEDULED
+      const newStatus = transitionLead(lead.status, { type: 'BOOK_APPOINTMENT' }, { leadId: lead.id, workspaceId });
+      if (newStatus !== lead.status) {
+        await this.prisma.lead.update({
+          where: { id: lead.id, workspaceId },
+          data: { status: newStatus },
+        });
+      }
 
-      logger.info({ leadId: lead.id, workspaceId: lead.workspaceId, bookingUid }, 'calcom-webhook: appointment created');
+      // BUG FIX #11: Notify assigned agent + trigger CRM sync
+      if (lead.assignedWorkspaceUserId) {
+        void queues.notification.add('appointment-booked', {
+          type: NotificationType.APPOINTMENT_BOOKED,
+          payload: {
+            leadId: lead.id,
+            leadName: lead.name ?? 'Lead',
+            scheduledAt: event.payload.startTime,
+            bookingUid,
+          },
+          workspaceId,
+          recipientWorkspaceUserId: lead.assignedWorkspaceUserId,
+        }, { removeOnComplete: 1000 });
+      }
+
+      void queues.crmSync.add('appointment-crm-sync', {
+        leadId: lead.id,
+        workspaceId,
+        event: 'lead.appointment_scheduled',
+      }, { removeOnComplete: 1000 });
+
+      logger.info({ leadId: lead.id, workspaceId: lead.workspaceId, bookingUid, newStatus }, 'calcom-webhook: appointment created');
     } else if (event.triggerEvent === 'BOOKING_CANCELLED') {
       // Tenant-scoped — never update appointments outside the resolved workspace.
       await this.prisma.appointment.updateMany({

@@ -1,44 +1,118 @@
-ame: CI
+name: CI
+
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
+  quality:
+    name: Type-check + Lint + Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: conversionops
-          POSTGRES_PASSWORD: password
+          POSTGRES_PASSWORD: testpass
           POSTGRES_DB: conversionops_test
-        ports: ["5432:5432"]
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       redis:
-        image: redis:7
-        ports: ["6379:6379"]
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://conversionops:testpass@localhost:5432/conversionops_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-secret-that-is-at-least-64-characters-long-for-pipeline-ok
+      MAGIC_LINK_SECRET: ci-test-magic-link-secret-also-at-least-64-chars-minimum-required
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with: { version: 9 }
-      - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "pnpm" }
-      - run: pnpm install
-      - run: pnpm run type-check
-      - run: pnpm run lint
-      - run: pnpm run db:generate
-        env:
-          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
-      - run: pnpm run db:migrate
-        env:
-          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
-      - run: pnpm run test
-        env:
-          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
-          REDIS_URL: redis://localhost:6379
-      - run: pnpm run test:isolation
-        env:
-          DATABASE_URL: postgresql://conversionops:password@localhost:5432/conversionops_test
-          REDIS_URL: redis://localhost:6379
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm run type-check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Generate Prisma client
+        run: pnpm run db:generate
+
+      - name: Run migrations
+        run: pnpm --filter @conversionops/db exec prisma migrate deploy
+
+      - name: Unit tests
+        run: pnpm run test
+
+      - name: Isolation tests
+        run: pnpm run test:isolation
+
+  docker-build-check:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image (validate only)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          tags: conversionops-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Worker image (validate only)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: false
+          tags: conversionops-worker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

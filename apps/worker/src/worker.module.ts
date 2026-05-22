@@ -1,4 +1,4 @@
-﻿import { Module, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Module, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Worker, Queue } from 'bullmq';
 import { QUEUE_NAMES, redisConnection } from '@conversionops/orchestration';
@@ -57,22 +57,29 @@ export class WorkerModule implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    const w = (concurrency: number) => ({
+      connection: redisConnection,
+      concurrency,
+      // Allow up to 30s for a job to complete after receiving SIGTERM before forced shutdown
+      closeTimeout: 30_000,
+    });
+
     this.workers.push(
-      new Worker(QUEUE_NAMES.LEAD_INTAKE, (job) => this.leadIntakeProcessor.process(job), { connection: redisConnection, concurrency: 10 }),
-      new Worker(QUEUE_NAMES.LEAD_ROUTING, (job) => this.leadRoutingProcessor.process(job), { connection: redisConnection, concurrency: 5 }),
-      new Worker(QUEUE_NAMES.AUDIT_LOG, (job) => this.auditLogProcessor.process(job), { connection: redisConnection, concurrency: 20 }),
-      new Worker(QUEUE_NAMES.NOTIFICATION, (job) => this.notificationProcessor.process(job), { connection: redisConnection, concurrency: 10 }),
-      new Worker(QUEUE_NAMES.AI_RESPONSE, (job) => this.aiResponseProcessor.process(job), { connection: redisConnection, concurrency: 5 }),
-      new Worker(QUEUE_NAMES.QUALIFICATION, (job) => this.qualificationProcessor.process(job), { connection: redisConnection, concurrency: 10 }),
-      new Worker(QUEUE_NAMES.MISSED_CALL, (job) => this.missedCallProcessor.process(job), { connection: redisConnection, concurrency: 5 }),
-      new Worker(QUEUE_NAMES.RETENTION, (job) => this.retentionProcessor.process(job), { connection: redisConnection, concurrency: 1 }),
-      new Worker(QUEUE_NAMES.CRM_SYNC, (job) => this.crmSyncProcessor.process(job), { connection: redisConnection, concurrency: 3 }),
-      new Worker(QUEUE_NAMES.APPOINTMENT_BOOKING, (job) => this.appointmentBookingProcessor.process(job), { connection: redisConnection, concurrency: 5 }),
-      new Worker(QUEUE_NAMES.REACTIVATION, (job) => this.reactivationProcessor.process(job), { connection: redisConnection, concurrency: 3 }),
-      new Worker(QUEUE_NAMES.ANALYTICS_INGEST, (job) => this.analyticsIngestProcessor.process(job), { connection: redisConnection, concurrency: 10 }),
+      new Worker(QUEUE_NAMES.LEAD_INTAKE,        (job) => this.leadIntakeProcessor.process(job),         w(10)),
+      new Worker(QUEUE_NAMES.AI_RESPONSE,         (job) => this.aiResponseProcessor.process(job),         w(5)),
+      new Worker(QUEUE_NAMES.QUALIFICATION,       (job) => this.qualificationProcessor.process(job),      w(10)),
+      new Worker(QUEUE_NAMES.LEAD_ROUTING,        (job) => this.leadRoutingProcessor.process(job),        w(5)),
+      new Worker(QUEUE_NAMES.APPOINTMENT_BOOKING, (job) => this.appointmentBookingProcessor.process(job), w(5)),
+      new Worker(QUEUE_NAMES.CRM_SYNC,            (job) => this.crmSyncProcessor.process(job),            w(3)),
+      new Worker(QUEUE_NAMES.MISSED_CALL,         (job) => this.missedCallProcessor.process(job),         w(5)),
+      new Worker(QUEUE_NAMES.REACTIVATION,        (job) => this.reactivationProcessor.process(job),       w(3)),
+      new Worker(QUEUE_NAMES.NOTIFICATION,        (job) => this.notificationProcessor.process(job),       w(10)),
+      new Worker(QUEUE_NAMES.AUDIT_LOG,           (job) => this.auditLogProcessor.process(job),           w(20)),
+      new Worker(QUEUE_NAMES.ANALYTICS_INGEST,    (job) => this.analyticsIngestProcessor.process(job),    w(10)),
+      new Worker(QUEUE_NAMES.RETENTION,           (job) => this.retentionProcessor.process(job),          w(1)),
     );
 
-    // Schedule daily retention job at 3am UTC
+    // Schedule nightly retention job at 3am UTC
     const retentionQueue = new Queue(QUEUE_NAMES.RETENTION, { connection: redisConnection });
     retentionQueue.add(
       'daily-retention',
@@ -82,7 +89,7 @@ export class WorkerModule implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    await Promise.all(this.workers.map((w) => w.close()));
+    // Graceful drain: stop accepting new jobs, wait for in-flight to complete (up to 30s each)
+    await Promise.allSettled(this.workers.map((w) => w.close()));
   }
 }
-

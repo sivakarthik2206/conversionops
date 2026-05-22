@@ -8,6 +8,7 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
+import type { OnApplicationShutdown } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
@@ -28,9 +29,12 @@ interface JoinConversationPayload {
   },
   transports: ['websocket', 'polling'],
 })
-export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnApplicationShutdown {
   @WebSocketServer()
   server!: Server;
+
+  private redisPub: Redis | null = null;
+  private redisSub: Redis | null = null;
 
   constructor(
     private readonly rooms: WorkspaceRoomsService,
@@ -43,13 +47,26 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     const redisUrl = process.env['REDIS_URL'];
     if (redisUrl) {
       try {
-        const pubClient = new Redis(redisUrl);
-        const subClient = pubClient.duplicate();
-        server.adapter(createAdapter(pubClient, subClient));
+        // Store references for clean shutdown — prevents Redis connection leaks
+        this.redisPub = new Redis(redisUrl, { maxRetriesPerRequest: null });
+        this.redisSub = this.redisPub.duplicate();
+        server.adapter(createAdapter(this.redisPub, this.redisSub));
         logger.info('RealtimeGateway: Redis adapter initialised');
       } catch (err) {
         logger.error({ err }, 'RealtimeGateway: failed to initialise Redis adapter');
       }
+    }
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    try {
+      await Promise.all([
+        this.redisPub?.quit().catch(() => undefined),
+        this.redisSub?.quit().catch(() => undefined),
+      ]);
+      logger.info('RealtimeGateway: Redis clients closed');
+    } catch (err) {
+      logger.warn({ err }, 'RealtimeGateway: error closing Redis clients');
     }
   }
 

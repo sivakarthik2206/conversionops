@@ -1,0 +1,160 @@
+################################################################################
+# ConversionOps — Cloud Monitoring Alert Policies
+# Apply with: gcloud alpha monitoring policies create --policy-from-file=monitoring-alerts.yaml
+#             OR import via Cloud Monitoring Console > Alerting > Create Policy
+#
+# Replace PROJECT_ID and NOTIFICATION_CHANNEL_ID before applying
+################################################################################
+
+# Alert 1: API Down
+---
+displayName: "ConversionOps API — Liveness Failing"
+combiner: OR
+conditions:
+  - displayName: "API liveness probe failing"
+    conditionThreshold:
+      filter: >
+        resource.type="cloud_run_revision"
+        AND resource.labels.service_name="conversionops-api"
+        AND metric.type="run.googleapis.com/request_count"
+        AND metric.labels.response_code_class="5xx"
+      comparison: COMPARISON_GT
+      thresholdValue: 10
+      duration: 120s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+documentation:
+  content: |
+    The ConversionOps API is returning 5xx errors at a high rate.
+    Runbook: https://github.com/your-org/conversionops/blob/main/docs/runbooks/incident-response.md#scenario-1
+  mimeType: text/markdown
+alertStrategy:
+  autoClose: 3600s
+
+---
+# Alert 2: Worker Crash Loop
+displayName: "ConversionOps Worker — Crash Loop Detected"
+combiner: OR
+conditions:
+  - displayName: "Worker restart rate elevated"
+    conditionThreshold:
+      filter: >
+        resource.type="cloud_run_revision"
+        AND resource.labels.service_name="conversionops-worker"
+        AND metric.type="run.googleapis.com/container/instance_count"
+      comparison: COMPARISON_GT
+      thresholdValue: 5
+      duration: 300s
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+documentation:
+  content: |
+    The ConversionOps Worker is restarting frequently — possible crash loop.
+    Check worker logs and job processor errors.
+    Runbook: docs/runbooks/incident-response.md#scenario-2
+  mimeType: text/markdown
+
+---
+# Alert 3: High API Latency
+displayName: "ConversionOps API — High Latency (p95 > 2s)"
+combiner: OR
+conditions:
+  - displayName: "API request latency p95 > 2s"
+    conditionThreshold:
+      filter: >
+        resource.type="cloud_run_revision"
+        AND resource.labels.service_name="conversionops-api"
+        AND metric.type="run.googleapis.com/request_latencies"
+      comparison: COMPARISON_GT
+      thresholdValue: 2000
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_PERCENTILE_99
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+
+---
+# Alert 4: Cloud SQL CPU Saturation
+displayName: "ConversionOps DB — CPU > 80%"
+combiner: OR
+conditions:
+  - displayName: "Cloud SQL CPU utilization above 80%"
+    conditionThreshold:
+      filter: >
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="PROJECT_ID:conversionops-db"
+        AND metric.type="cloudsql.googleapis.com/database/cpu/utilization"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.8
+      duration: 300s
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+documentation:
+  content: |
+    Cloud SQL CPU is above 80% for 5 minutes. Consider scaling to db-n1-standard-2.
+    Current tier: db-g1-small (1 shared vCPU, 1.7GB RAM)
+  mimeType: text/markdown
+
+---
+# Alert 5: Cloud SQL Disk Almost Full
+displayName: "ConversionOps DB — Disk > 80%"
+combiner: OR
+conditions:
+  - displayName: "Cloud SQL disk utilization above 80%"
+    conditionThreshold:
+      filter: >
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="PROJECT_ID:conversionops-db"
+        AND metric.type="cloudsql.googleapis.com/database/disk/utilization"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.8
+      duration: 60s
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+
+---
+# Alert 6: Redis Memory Saturation
+displayName: "ConversionOps Redis — Memory > 85%"
+combiner: OR
+conditions:
+  - displayName: "Redis memory above 85%"
+    conditionThreshold:
+      filter: >
+        resource.type="redis_instance"
+        AND resource.labels.instance_id="conversionops-redis"
+        AND metric.type="redis.googleapis.com/stats/memory/usage_ratio"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.85
+      duration: 180s
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+documentation:
+  content: |
+    Redis memory is above 85%. Queue backlog may be causing unbounded growth.
+    Check for stuck jobs: redis-cli KEYS "bull:*:wait" | xargs redis-cli LLEN
+  mimeType: text/markdown
+
+---
+# Alert 7: Budget Alert (cost control)
+# Configure via: gcloud billing budgets create
+# This is a reference — budget alerts are configured in Billing, not Monitoring
+# displayName: "ConversionOps Monthly Budget > $150"
+# Recommended: set alerts at 50%, 80%, 100% of $200/month budget
+
+################################################################################
+# NOTIFICATION CHANNEL SETUP
+# Create a Slack or email notification channel:
+#
+# Email:
+#   gcloud alpha monitoring channels create \
+#     --display-name="ConversionOps Alerts" \
+#     --type=email \
+#     --channel-labels=email_address=oncall@conversionops.in
+#
+# Slack:
+#   Create in Console > Monitoring > Alerting > Notification Channels
+################################################################################

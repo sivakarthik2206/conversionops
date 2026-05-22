@@ -47,7 +47,17 @@
       "Bash(curl -sD headers.txt -o response.txt http://localhost:3001/v1/health)",
       "Bash(del headers.txt response.txt)",
       "Bash(curl *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(npx prisma *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(Get-ChildItem -Path . -Depth 1)",
+      "Bash(Select-Object Name)",
+      "Bash(dir apps/api/src/modules/)",
+      "PowerShell(Head *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(\"../../node_modules/.bin/eslint\" src *)",
+      "Bash(git -C \"C:/Users/Karthik/Desktop/conversionops\" add .)"
     ]
   }
 }

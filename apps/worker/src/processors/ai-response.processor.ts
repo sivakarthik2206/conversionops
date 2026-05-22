@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { createHash } from 'crypto';
 import { logger } from '@conversionops/observability';
-import { queues } from '@conversionops/orchestration';
+import { queues, EventStore, transitionLead } from '@conversionops/orchestration';
 import type { AiResponseJobData } from '@conversionops/orchestration';
 import type { EvalJobData } from '@conversionops/ai';
-import { MessageRole, NotificationType } from '@conversionops/db';
+import { MessageRole, LeadStatus, NotificationType } from '@conversionops/db';
 import type { Prisma } from '@conversionops/db';
 import { isQuietHours, isOptOutKeyword } from '@conversionops/compliance';
 import { checkFairHousing } from '@conversionops/compliance';
@@ -14,6 +14,7 @@ import { NotificationService } from '@conversionops/orchestration';
 import { TwilioClient } from '@conversionops/integrations';
 import { PrismaService } from '../modules/prisma/prisma.service';
 import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
+
 interface AIMessageMetadata {
   promptVersion: string;
   promptHash: string;
@@ -38,6 +39,7 @@ const POLICY_VERSION = 'fair-housing-policy-v1.0.0';
 export class AiResponseProcessor {
   private readonly vertexClient: VertexAIClient;
   private readonly notificationService: NotificationService;
+  private readonly eventStore: EventStore;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -45,11 +47,13 @@ export class AiResponseProcessor {
   ) {
     this.vertexClient = new VertexAIClient();
     this.notificationService = new NotificationService(queues.notification);
+    this.eventStore = new EventStore(prisma);
   }
 
   /**
    * 7-step AI response pipeline. Pre-send checklist enforces TCPA, quota, and FHA compliance.
-   * SMS is only sent after the message record is persisted.
+   * Persists qualification data and advances the XState lead lifecycle machine after each response.
+   * SMS is only sent after the message record is persisted (never before).
    */
   async process(job: Job<AiResponseJobData>): Promise<void> {
     const { leadId, workspaceId, conversationId } = job.data;
@@ -65,7 +69,7 @@ export class AiResponseProcessor {
       return;
     }
 
-    // Step 1: Check AI is allowed
+    // Step 1: Check AI is allowed for this workspace + conversation
     if (workspace.aiPaused) {
       logger.info({ workspaceId, leadId }, 'ai-response: workspace AI paused, skipping');
       return;
@@ -74,8 +78,12 @@ export class AiResponseProcessor {
       logger.info({ conversationId, leadId }, 'ai-response: conversation AI not active, skipping');
       return;
     }
+    if (lead.aiPausedForLead) {
+      logger.info({ leadId, workspaceId }, 'ai-response: AI paused for this lead, skipping');
+      return;
+    }
 
-    // Step 2: Check opt-out keyword on last inbound message
+    // Step 2: Check opt-out on last inbound message (TCPA)
     const lastInbound = await this.prisma.message.findFirst({
       where: { conversationId, workspaceId, role: MessageRole.HUMAN },
       orderBy: { createdAt: 'desc' },
@@ -102,7 +110,12 @@ export class AiResponseProcessor {
       return;
     }
 
-    // Generate AI response
+    // Count prior AI messages BEFORE generation — used for state machine advancement below
+    const priorAiMessageCount = await this.prisma.message.count({
+      where: { conversationId, workspaceId, role: MessageRole.AI },
+    });
+
+    // Generate AI response (includes qualification data extraction)
     const startMs = Date.now();
     const chainResult = await runQualificationChain(conversationId, workspace, lead, this.vertexClient, this.prisma);
 
@@ -111,7 +124,8 @@ export class AiResponseProcessor {
       return;
     }
 
-    const { content, inputTokens, outputTokens, latencyMs } = chainResult.value;
+    // BUG FIX #1: Extract ALL fields from chain result — updatedQualification and shouldBook were previously ignored
+    const { content, inputTokens, outputTokens, latencyMs, updatedQualification, shouldBook } = chainResult.value;
 
     // Step 5: Fair Housing check
     const fhaResult = checkFairHousing(content);
@@ -138,7 +152,7 @@ export class AiResponseProcessor {
       quietHoursApplied: false,
     };
 
-    // Persist message BEFORE sending SMS
+    // Persist message BEFORE sending SMS — message record must exist before delivery
     const message = await this.prisma.message.create({
       data: {
         conversationId,
@@ -149,8 +163,18 @@ export class AiResponseProcessor {
       },
     });
 
-    // Send SMS — only after message is persisted.
-    // Wrapper enforces consent + quiet hours; this is the single TCPA gate.
+    // BUG FIX #2: Write qualification data back to lead + advance XState machine
+    // Previously, updatedQualification was extracted but never saved — lead.qualification was always {}
+    await this.persistQualificationAndAdvanceStatus(
+      leadId,
+      workspaceId,
+      lead.status,
+      updatedQualification as Record<string, unknown>,
+      lead.qualification as Record<string, unknown>,
+      priorAiMessageCount,
+    );
+
+    // Step 6: Send SMS (only after message is persisted)
     if (lead.phone) {
       const twilio = new TwilioClient(
         process.env['TWILIO_ACCOUNT_SID'] ?? '',
@@ -188,22 +212,34 @@ export class AiResponseProcessor {
       this.prisma,
     );
 
-    // Enqueue downstream jobs (non-blocking)
-    void queues.qualification.add('qualify', { leadId, workspaceId, conversationId }, { removeOnComplete: 1000 });
-    void queues.analyticsIngest.add('ai.latency', {
-      workspaceId,
-      event: 'ai.response.latency',
-      leadId,
-      metadata: { latencyMs: Date.now() - startMs },
-    }, { removeOnComplete: 1000 });
-    void queues.auditLog.add('ai-message', {
-      workspaceId,
-      action: 'ai.message.sent',
-      resourceId: message.id,
-      resourceType: 'message',
-    }, { removeOnComplete: 1000 });
+    // BUG FIX #9: Enqueue appointment-booking when AI chain signals booking intent
+    if (shouldBook) {
+      void queues.appointmentBooking
+        .add('send-booking-link', { leadId, workspaceId, conversationId }, { removeOnComplete: 1000, priority: 1 })
+        .catch((err: unknown) => logger.error({ err, leadId }, 'ai-response: booking enqueue failed'));
+    }
 
-    // Emit real-time event
+    // Downstream jobs — errors are non-fatal but logged
+    queues.qualification
+      .add('qualify', { leadId, workspaceId, conversationId }, { removeOnComplete: 1000 })
+      .catch((err: unknown) => logger.error({ err, leadId }, 'ai-response: qualification enqueue failed'));
+    queues.analyticsIngest
+      .add('ai.latency', {
+        workspaceId,
+        event: 'ai.response.latency',
+        leadId,
+        metadata: { latencyMs: Date.now() - startMs },
+      }, { removeOnComplete: 1000 })
+      .catch((err: unknown) => logger.warn({ err }, 'ai-response: analytics enqueue failed'));
+    queues.auditLog
+      .add('ai-message', {
+        workspaceId,
+        action: 'ai.message.sent',
+        resourceId: message.id,
+        resourceType: 'message',
+      }, { removeOnComplete: 1000 })
+      .catch((err: unknown) => logger.warn({ err }, 'ai-response: audit log enqueue failed'));
+
     this.realtimeEmitter.emitToWorkspace(workspaceId, 'message:new', {
       conversationId,
       messageId: message.id,
@@ -212,10 +248,71 @@ export class AiResponseProcessor {
       createdAt: message.createdAt.toISOString(),
     });
 
-    // Run evals async — never awaited
     void this.scheduleEvals(message.id, workspaceId, leadId, conversationId);
 
-    logger.info({ leadId, workspaceId, messageId: message.id, latencyMs: Date.now() - startMs }, 'ai-response: complete');
+    logger.info({ leadId, workspaceId, messageId: message.id, latencyMs: Date.now() - startMs, shouldBook }, 'ai-response: complete');
+  }
+
+  /**
+   * Persists extracted qualification data to the lead and advances the XState machine.
+   *
+   * State advancement rules:
+   *   - 0 prior AI messages (first contact): NEW → CONTACTED (CONTACT_MADE)
+   *   - 1+ prior AI messages and lead is CONTACTED: CONTACTED → QUALIFYING (QUALIFICATION_STARTED)
+   *   - REACTIVATED leads: REACTIVATED → QUALIFYING on second contact
+   */
+  private async persistQualificationAndAdvanceStatus(
+    leadId: string,
+    workspaceId: string,
+    currentStatus: LeadStatus,
+    updatedQualification: Record<string, unknown>,
+    existingQualification: Record<string, unknown>,
+    priorAiMessageCount: number,
+  ): Promise<void> {
+    const qualificationChanged =
+      JSON.stringify(updatedQualification) !== JSON.stringify(existingQualification);
+
+    let newStatus = currentStatus;
+
+    // Determine state transition based on message history
+    if (priorAiMessageCount === 0 && currentStatus === LeadStatus.NEW) {
+      const next = transitionLead(currentStatus, { type: 'CONTACT_MADE' }, { leadId, workspaceId });
+      if (next !== currentStatus) newStatus = next;
+    } else if (priorAiMessageCount >= 1 && currentStatus === LeadStatus.CONTACTED) {
+      const next = transitionLead(currentStatus, { type: 'QUALIFICATION_STARTED' }, { leadId, workspaceId });
+      if (next !== currentStatus) newStatus = next;
+    } else if (priorAiMessageCount >= 1 && currentStatus === LeadStatus.REACTIVATED) {
+      const next = transitionLead(currentStatus, { type: 'QUALIFICATION_STARTED' }, { leadId, workspaceId });
+      if (next !== currentStatus) newStatus = next;
+    }
+
+    const statusChanged = newStatus !== currentStatus;
+
+    if (!qualificationChanged && !statusChanged) return;
+
+    await this.prisma.lead.update({
+      where: { id: leadId, workspaceId },
+      data: {
+        ...(qualificationChanged ? { qualification: updatedQualification as Prisma.InputJsonValue } : {}),
+        ...(statusChanged ? { status: newStatus } : {}),
+      },
+    });
+
+    if (statusChanged) {
+      // Map state to a typed LeadEventType for the event log
+      const eventTypeMap: Partial<Record<string, 'lead.contacted' | 'lead.qualification.started'>> = {
+        CONTACTED: 'lead.contacted',
+        QUALIFYING: 'lead.qualification.started',
+      };
+      const eventType = eventTypeMap[newStatus] ?? 'lead.contacted';
+      await this.eventStore.append({
+        leadId,
+        workspaceId,
+        type: eventType,
+        payload: { from: currentStatus, to: newStatus },
+        triggeredBy: 'ai-response-processor',
+      });
+    }
   }
 
   private async scheduleEvals(messageId: string, workspaceId: string, leadId: string, conversationId: string): Promise<void> {

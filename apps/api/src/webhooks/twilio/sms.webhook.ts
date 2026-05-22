@@ -95,7 +95,39 @@ export class TwilioSMSWebhookController {
         if (workspace) {
           const consentRepo = new ConsentRepository(this.prisma);
           await consentRepo.upsertOptOut(From, workspace.id, messageBody.trim().toUpperCase(), ConsentChannel.SMS);
-          logger.info({ from: From, keyword: messageBody, workspaceId: workspace.id }, 'twilio-sms: opt-out recorded');
+
+          // Halt all active conversations for this phone + workspace immediately.
+          // This closes the race window where a queued ai-response job might still
+          // pass the opt-out keyword check (it also checks TwilioClient consent, but
+          // setting aiActive=false is a belt-and-suspenders guarantee).
+          const [affectedConversations] = await Promise.all([
+            this.prisma.conversation.findMany({
+              where: { workspaceId: workspace.id, aiActive: true, deletedAt: null,
+                lead: { phone: From, deletedAt: null } },
+              select: { id: true },
+            }),
+          ]);
+
+          if (affectedConversations.length > 0) {
+            const conversationIds = affectedConversations.map((c) => c.id);
+            await this.prisma.conversation.updateMany({
+              where: { id: { in: conversationIds }, workspaceId: workspace.id },
+              data: { aiActive: false, status: 'OPT_OUT' },
+            });
+          }
+
+          // Transition lead to OPT_OUT in state machine
+          const lead = await this.prisma.lead.findFirst({
+            where: { phone: From, workspaceId: workspace.id, deletedAt: null },
+          });
+          if (lead) {
+            await this.prisma.lead.update({
+              where: { id: lead.id, workspaceId: workspace.id },
+              data: { status: 'OPT_OUT' },
+            });
+          }
+
+          logger.info({ from: From, keyword: messageBody, workspaceId: workspace.id }, 'twilio-sms: opt-out recorded, conversations halted');
         }
         await this.idempotencyService.complete(idempotencyKey, { optOut: true });
         res.status(HttpStatus.OK).type('text/xml').send('<Response/>');

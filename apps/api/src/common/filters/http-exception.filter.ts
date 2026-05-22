@@ -19,6 +19,7 @@ import {
   ValidationError,
 } from '@conversionops/sdk-standards';
 import { logger } from '@conversionops/observability';
+import * as Sentry from '@sentry/node';
 
 @Catch()
 @Injectable()
@@ -86,6 +87,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       error = 'INTERNAL_ERROR';
       message = 'An unexpected error occurred';
       logger.error({ requestId, err: exception, path: request.path }, 'Unhandled exception');
+      Sentry.captureException(exception, { tags: { requestId, path: request.path } });
     }
 
     response.status(statusCode).json({

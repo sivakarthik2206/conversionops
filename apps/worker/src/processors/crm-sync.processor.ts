@@ -18,9 +18,11 @@ export class CrmSyncProcessor {
    * Syncs a lead to the configured CRM (Follow Up Boss or Zapier).
    * Retries up to 3 times with exponential backoff.
    * Never throws — all errors are logged.
+   *
+   * BUG FIX #14: Uses event type from job data instead of hardcoded 'lead.qualified'.
    */
   async process(job: Job<CrmSyncJobData>): Promise<void> {
-    const { leadId, workspaceId } = job.data;
+    const { leadId, workspaceId, event: crmEvent } = job.data;
 
     try {
       const [lead, workspace] = await Promise.all([
@@ -43,7 +45,7 @@ export class CrmSyncProcessor {
       if (fubApiKey) {
         await this.syncToFUB(lead, workspace, fubApiKey, job.attemptsMade);
       } else if (zapierWebhookUrl) {
-        await this.syncToZapier(lead, workspace, zapierWebhookUrl);
+        await this.syncToZapier(lead, workspace, zapierWebhookUrl, crmEvent ?? 'lead.qualified');
       } else {
         logger.debug({ leadId, workspaceId, crmType }, 'crm-sync: no CRM configured, skipping');
       }
@@ -82,9 +84,12 @@ export class CrmSyncProcessor {
     lead: Lead,
     workspace: Workspace,
     webhookUrl: string,
+    eventType: string,
   ): Promise<void> {
     const relay = new ZapierWebhookRelay();
-    const event: CRMEvent = 'lead.qualified';
+    // Use the provided event type (passed from job data) or fall back to 'lead.qualified'
+    const validEvents: CRMEvent[] = ['lead.created', 'lead.qualified', 'lead.appointment_scheduled', 'lead.converted'];
+    const event: CRMEvent = (validEvents.includes(eventType as CRMEvent) ? eventType : 'lead.qualified') as CRMEvent;
 
     const result = await relay.relayLead(webhookUrl, lead, event);
     if (!result.ok) {

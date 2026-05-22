@@ -8,6 +8,7 @@ export interface ConversationContext {
   messages: ConversationMessage[];
   summary: string | null;
   leadName?: string | null;
+  totalMessageCount: number;
 }
 
 export interface QualificationData {

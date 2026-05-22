@@ -3,17 +3,24 @@ kind: Service
 metadata:
   name: conversionops-worker
   annotations:
+    # Internal-only: worker is not public-facing
     run.googleapis.com/ingress: internal
 spec:
   template:
     metadata:
       annotations:
+        # Never throttle CPU — worker does continuous queue processing
         run.googleapis.com/cpu-throttling: 'false'
-        autoscaling.knative.dev/minScale: '0'
+        # min=1 prevents cold-start job delays (BullMQ jobs would queue for 10-30s on cold start)
+        autoscaling.knative.dev/minScale: '1'
         autoscaling.knative.dev/maxScale: '3'
+        # Connect via Cloud SQL connector (no public IP needed)
         run.googleapis.com/cloudsql-instances: PROJECT_ID:us-central1:conversionops-db
     spec:
+      # One worker instance = one concurrent job stream
+      # (BullMQ concurrency is controlled in code per queue, not via Cloud Run)
       containerConcurrency: 1
+      # 5-minute timeout — longest expected job is CRM sync + AI chain
       timeoutSeconds: 300
       serviceAccountName: conversionops-runner@PROJECT_ID.iam.gserviceaccount.com
       containers:
@@ -25,8 +32,10 @@ spec:
           env:
             - name: NODE_ENV
               value: production
-            - name: CPU_ALWAYS_ALLOCATED
-              value: 'true'
+            - name: GOOGLE_CLOUD_PROJECT
+              value: PROJECT_ID
+            - name: VERTEX_AI_MODEL
+              value: gemini-1.5-flash-001
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -57,10 +66,6 @@ spec:
                 secretKeyRef:
                   name: RESEND_API_KEY
                   key: latest
-            - name: GOOGLE_CLOUD_PROJECT
-              value: PROJECT_ID
-            - name: VERTEX_AI_MODEL
-              value: gemini-1.5-flash-001
             - name: CALCOM_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -71,3 +76,22 @@ spec:
                 secretKeyRef:
                   name: FUB_API_KEY
                   key: latest
+          # Liveness probe: process is alive and Redis is reachable
+          # Worker has no HTTP port — probe checks that the Node process is responsive
+          # via a lightweight TCP check on the Redis connection
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - '-e'
+                - |
+                  const net = require('net');
+                  const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+                  const client = net.createConnection({ host: url.hostname, port: parseInt(url.port) || 6379 });
+                  client.on('connect', () => { client.destroy(); process.exit(0); });
+                  client.on('error', () => process.exit(1));
+                  setTimeout(() => process.exit(1), 3000);
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3

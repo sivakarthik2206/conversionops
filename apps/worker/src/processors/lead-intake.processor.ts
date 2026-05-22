@@ -20,8 +20,12 @@ export class LeadIntakeProcessor {
   }
 
   /**
-   * Processes incoming lead intake jobs. Creates or updates lead + conversation,
-   * then enqueues the ai-response job.
+   * Processes incoming lead intake jobs. Creates or finds lead + conversation,
+   * stores the inbound message, then enqueues the ai-response job.
+   *
+   * BUG FIX #6: Lead lookup+create now uses a serializable transaction to prevent
+   * duplicate leads from concurrent jobs (e.g., Zillow retry + SMS inbound simultaneously).
+   * BUG FIX #7: Conversation lookup+create also serialized to prevent duplicate conversations.
    */
   async process(job: Job<LeadIntakeJobData>): Promise<void> {
     const { workspaceId, from, to, body, messageSid, source, name, email, metadata } = job.data;
@@ -34,31 +38,17 @@ export class LeadIntakeProcessor {
         return;
       }
 
-      // Find or create lead by phone
-      let lead = leadId
-        ? await this.prisma.lead.findFirst({ where: { id: leadId, workspaceId, deletedAt: null } })
-        : from
-          ? await this.prisma.lead.findFirst({ where: { phone: from, workspaceId, deletedAt: null } })
-          : null;
-
       const leadSource = resolveSource(source ?? metadata?.['source']);
 
-      if (!lead) {
-        lead = await this.prisma.lead.create({
-          data: {
-            workspaceId,
-            phone: from ?? null,
-            email: email ?? null,
-            name: name ?? from ?? 'Unknown',
-            source: leadSource,
-            status: LeadStatus.NEW,
-            qualification: {} as Prisma.InputJsonValue,
-            sourcePayload: (metadata ?? {}) as Prisma.InputJsonValue,
-          },
-        });
+      // BUG FIX #6: Serializable transaction prevents duplicate lead creation
+      // under concurrent intake for the same phone number
+      let isNewLead = false;
+      const lead = await this.findOrCreateLead(leadId, from, email, name, workspaceId, leadSource, metadata, () => { isNewLead = true; });
+      leadId = lead.id;
 
+      if (isNewLead) {
         await this.eventStore.append({
-          leadId: lead.id,
+          leadId,
           workspaceId,
           type: 'lead.created',
           payload: { source: leadSource, phone: from, email },
@@ -66,32 +56,15 @@ export class LeadIntakeProcessor {
         });
 
         this.realtimeEmitter.emitToWorkspace(workspaceId, 'lead:created', {
-          leadId: lead.id,
+          leadId,
           source: leadSource,
         });
 
-        logger.info({ leadId: lead.id, workspaceId, source: leadSource }, 'lead-intake: new lead created');
+        logger.info({ leadId, workspaceId, source: leadSource }, 'lead-intake: new lead created');
       }
 
-      leadId = lead.id;
-
-      // Find or create conversation
-      let conversation = await this.prisma.conversation.findFirst({
-        where: { leadId, workspaceId, status: { not: ConversationStatus.COMPLETED }, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (!conversation) {
-        conversation = await this.prisma.conversation.create({
-          data: {
-            workspaceId,
-            leadId,
-            channel: Channel.SMS,
-            status: ConversationStatus.AI_ACTIVE,
-            aiActive: true,
-          },
-        });
-      }
+      // BUG FIX #7: Serializable transaction prevents duplicate conversation creation
+      const conversation = await this.findOrCreateConversation(leadId, workspaceId, to);
 
       // Store inbound message if body is present
       if (body) {
@@ -106,7 +79,7 @@ export class LeadIntakeProcessor {
         });
       }
 
-      // Enqueue AI response
+      // Enqueue AI response with high priority
       await queues.aiResponse.add(
         'respond',
         { leadId, workspaceId, conversationId: conversation.id },
@@ -118,6 +91,87 @@ export class LeadIntakeProcessor {
       logger.error({ err, workspaceId, leadId }, 'lead-intake: processing error');
       throw err;
     }
+  }
+
+  /**
+   * Finds an existing lead by phone or creates one atomically inside a serializable transaction.
+   * The onCreated callback fires only if a new lead was inserted.
+   */
+  private async findOrCreateLead(
+    leadId: string | undefined,
+    phone: string | undefined,
+    email: string | undefined,
+    name: string | undefined,
+    workspaceId: string,
+    leadSource: LeadSource,
+    metadata: Record<string, unknown> | undefined,
+    onCreated: () => void,
+  ): Promise<{ id: string }> {
+    if (leadId) {
+      const existing = await this.prisma.lead.findFirst({
+        where: { id: leadId, workspaceId, deletedAt: null },
+      });
+      if (existing) return existing;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Re-check inside the transaction with FOR UPDATE semantics (serializable)
+      const existing = phone
+        ? await tx.lead.findFirst({ where: { phone, workspaceId, deletedAt: null } })
+        : email
+          ? await tx.lead.findFirst({ where: { email, workspaceId, deletedAt: null } })
+          : null;
+
+      if (existing) return existing;
+
+      onCreated();
+      return tx.lead.create({
+        data: {
+          workspaceId,
+          phone: phone ?? null,
+          email: email ?? null,
+          name: name ?? phone ?? 'Unknown',
+          source: leadSource,
+          status: LeadStatus.NEW,
+          qualification: {} as Prisma.InputJsonValue,
+          sourcePayload: (metadata ?? {}) as Prisma.InputJsonValue,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
+  }
+
+  /**
+   * Finds an existing active conversation or creates one atomically.
+   */
+  private async findOrCreateConversation(
+    leadId: string,
+    workspaceId: string,
+    toNumber: string | undefined,
+  ): Promise<{ id: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.conversation.findFirst({
+        where: {
+          leadId,
+          workspaceId,
+          status: { not: ConversationStatus.COMPLETED },
+          deletedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (existing) return existing;
+
+      return tx.conversation.create({
+        data: {
+          workspaceId,
+          leadId,
+          channel: Channel.SMS,
+          status: ConversationStatus.AI_ACTIVE,
+          aiActive: true,
+          toNumber: toNumber ?? null,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
   }
 }
 

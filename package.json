@@ -1,7 +1,10 @@
 {
   "name": "conversionops",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "build:packages": "pnpm --filter './packages/*' -r build",
@@ -15,16 +18,27 @@
     "db:migrate:dev": "pnpm --filter @conversionops/db exec prisma migrate dev",
     "db:studio": "pnpm --filter @conversionops/db run db:studio",
     "db:seed": "pnpm --filter @conversionops/db run db:seed",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "validate-env": "node infra/scripts/validate-env.mjs",
+    "health-check": "powershell -ExecutionPolicy Bypass -File infra/scripts/health-check.ps1"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
     "prettier": "^3.0.0",
+    "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@9.0.0",
+  "dependencies": {
+    "@opentelemetry/auto-instrumentations-node": "^0.76.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
+    "@opentelemetry/resources": "^2.7.1",
+    "@opentelemetry/sdk-node": "^0.218.0",
+    "@opentelemetry/semantic-conventions": "^1.41.1",
+    "@sentry/node": "^10.53.1",
+    "@sentry/profiling-node": "^10.53.1"
+  }
 }

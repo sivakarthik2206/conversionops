@@ -1,28 +1,34 @@
-ame: Deploy Production
+name: Deploy Production (via Cloud Build)
+
+# Deployments to production are handled exclusively by GCP Cloud Build.
+# Cloud Build is configured with a GitHub push trigger on the `main` branch
+# in the GCP Console under Cloud Build > Triggers.
+#
+# Cloud Build pipeline: infra/gcp/cloudbuild.yaml
+# Steps: install → type-check → lint → test → build images →
+#        push to Artifact Registry → migrate → deploy API →
+#        smoke test → deploy Worker
+#
+# Manual rollback:
+#   gcloud run services update-traffic conversionops-api \
+#     --region=us-central1 \
+#     --to-revisions=<PREVIOUS_REVISION>=100
+#
+# View revisions:
+#   gcloud run revisions list --service=conversionops-api --region=us-central1
+
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  notify-cloud-build:
+    name: Production Deploy (GCP Cloud Build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with: { version: 9 }
-      - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "pnpm" }
-      - run: pnpm install
-      - run: pnpm run build
-      - name: Deploy API to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: conversionops-api
-          publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
-          package: apps/api
-      - name: Deploy Worker to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: conversionops-worker
-          publish-profile: ${{ secrets.AZURE_WORKER_PUBLISH_PROFILE }}
-          package: apps/worker
+      - name: Deployment handled by GCP Cloud Build
+        run: |
+          echo "Production deployment is triggered automatically by GCP Cloud Build"
+          echo "Monitor at: https://console.cloud.google.com/cloud-build/builds"
+          echo "Commit: $GITHUB_SHA"
+          echo "Branch: $GITHUB_REF_NAME"

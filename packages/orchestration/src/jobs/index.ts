@@ -38,6 +38,8 @@ export interface AppointmentBookingJobData {
 export interface CrmSyncJobData {
   leadId: string;
   workspaceId: string;
+  /** Optional CRM event type override. Defaults to 'lead.qualified' when omitted. */
+  event?: string;
 }
 
 export interface MissedCallJobData {

@@ -9,6 +9,8 @@ export type CRMEvent =
   | 'lead.created'
   | 'lead.qualified'
   | 'lead.assigned'
+  | 'lead.appointment_scheduled'
+  | 'lead.converted'
   | 'appointment.booked';
 
 /**

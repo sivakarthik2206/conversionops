@@ -70,7 +70,18 @@ export class MissedCallProcessor {
 
       leadId = lead.id;
 
-      // Validate TCPA consent
+      // BUG FIX #5 (TCPA): Check for existing OPTED_OUT before creating OPTED_IN consent.
+      // Previously, the code created OPTED_IN over any OPTED_OUT record — a TCPA violation.
+      // A caller who previously texted STOP must NOT receive a text-back from a missed call.
+      const existingOptOut = await this.prisma.consentRecord.findFirst({
+        where: { phone: fromNumber, workspaceId, channel: 'SMS', status: 'OPTED_OUT', deletedAt: null },
+      });
+      if (existingOptOut) {
+        logger.info({ fromNumber, workspaceId, leadId }, 'missed-call: caller previously opted out — skipping text-back (TCPA compliance)');
+        // Job will complete normally — no SMS sent, no further processing
+        return;
+      }
+
       const hasConsent = await validateConsent(fromNumber, workspaceId, this.prisma);
       if (!hasConsent) {
         await this.prisma.consentRecord.create({

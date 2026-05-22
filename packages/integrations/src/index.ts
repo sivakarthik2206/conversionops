@@ -13,3 +13,7 @@ export { CalComClient } from './booking/cal-com/client';
 export type { CalEventType, TimeSlot, CalBooking } from './booking/cal-com/client';
 export { parseCalComWebhook } from './booking/cal-com/webhooks';
 export type { CalComWebhookEvent, CalComEventType } from './booking/cal-com/webhooks';
+
+export type { EmailProvider, SendEmailRequest, SendEmailResponse, EmailRecipient } from './email/email-provider.interface';
+export { ResendEmailProvider } from './email/resend-provider';
+export { EmailRouter } from './email/email-router';

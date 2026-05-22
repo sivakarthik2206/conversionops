@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
@@ -23,8 +24,14 @@ export class AdminController {
 
   /** Returns all workspaces with basic stats. */
   @Get('workspaces')
-  async listWorkspaces() {
+  async listWorkspaces(
+    @Query('limit') limitStr?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    const limit = limitStr ? Math.min(parseInt(limitStr, 10), 100) : 50;
     const workspaces = await this.prisma.workspace.findMany({
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       where: { deletedAt: null },
       include: {
         _count: {
@@ -37,19 +44,26 @@ export class AdminController {
       orderBy: { createdAt: 'desc' },
     });
 
-    return workspaces.map((ws) => ({
-      id: ws.id,
-      name: ws.name,
-      slug: ws.slug,
-      plan: ws.plan,
-      status: ws.status,
-      ownerEmail: ws.ownerEmail,
-      agentCount: ws._count.users,
-      totalLeads: ws._count.leads,
-      tokenUsageCurrentMonth: ws.tokenUsageCurrentMonth,
-      tokenQuotaMonthly: ws.tokenQuotaMonthly,
-      createdAt: ws.createdAt,
-    }));
+    const hasMore = workspaces.length > limit;
+    const items = hasMore ? workspaces.slice(0, -1) : workspaces;
+    const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+    return {
+      items: items.map((ws) => ({
+        id: ws.id,
+        name: ws.name,
+        slug: ws.slug,
+        plan: ws.plan,
+        status: ws.status,
+        ownerEmail: ws.ownerEmail,
+        agentCount: ws._count.users,
+        totalLeads: ws._count.leads,
+        tokenUsageCurrentMonth: ws.tokenUsageCurrentMonth,
+        tokenQuotaMonthly: ws.tokenQuotaMonthly,
+        createdAt: ws.createdAt,
+      })),
+      nextCursor,
+    };
   }
 
   /** Returns a single workspace with full config. */

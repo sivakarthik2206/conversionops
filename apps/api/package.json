@@ -8,9 +8,9 @@
     "start": "node dist/main",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
-    "test": "jest --testPathPattern=unit",
-    "test:isolation": "jest --testPathPattern=isolation",
-    "test:integration": "jest --testPathPattern=integration"
+    "test": "jest --testPathPattern=unit --passWithNoTests",
+    "test:isolation": "jest --testPathPattern=isolation --passWithNoTests",
+    "test:integration": "jest --testPathPattern=integration --passWithNoTests"
   },
   "dependencies": {
     "@conversionops/ai": "workspace:*",

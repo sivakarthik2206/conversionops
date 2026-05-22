@@ -27,8 +27,12 @@ export class LeadRoutingProcessor {
   }
 
   /**
-   * Processes lead-routing jobs. Evaluates routing rules, assigns the lead,
-   * transitions the XState machine, and notifies the assigned agent.
+   * Processes lead-routing jobs.
+   *
+   * BUG FIX #4: Previously sent ASSIGN event directly, but the state machine requires
+   * QUALIFIED → ROUTE → ROUTING → ASSIGN → ASSIGNED. The fix transitions through ROUTING
+   * first, then ASSIGNED. All three DB writes are wrapped in a transaction to prevent
+   * partial state (assignment created but lead status not updated).
    */
   async process(job: Job<LeadRoutingJobData>): Promise<void> {
     const { leadId, workspaceId } = job.data;
@@ -56,30 +60,42 @@ export class LeadRoutingProcessor {
       return;
     }
 
-    await this.prisma.leadAssignment.create({
-      data: {
-        leadId,
-        workspaceId,
-        workspaceUserId: candidate.workspaceUserId,
-        routingReason: candidate.reason,
-        routingScore: candidate.score,
-        isPrimary: true,
-      },
-    });
+    // BUG FIX #4: Correct state machine sequence: QUALIFIED → ROUTING → ASSIGNED
+    // The machine requires going through ROUTING state before ASSIGNED.
+    let currentStatus = lead.status;
 
-    await this.prisma.lead.update({
-      where: { id: leadId, workspaceId },
-      data: { assignedWorkspaceUserId: candidate.workspaceUserId },
-    });
-
-    const newStatus = transitionLead(lead.status, { type: 'ASSIGN' }, { leadId, workspaceId });
-
-    if (newStatus !== lead.status) {
-      await this.prisma.lead.update({
-        where: { id: leadId, workspaceId },
-        data: { status: newStatus },
-      });
+    // Step 1: QUALIFIED → ROUTING (via ROUTE event)
+    if (currentStatus === LeadStatus.QUALIFIED) {
+      const routingStatus = transitionLead(currentStatus, { type: 'ROUTE' }, { leadId, workspaceId });
+      if (routingStatus === LeadStatus.ROUTING) {
+        currentStatus = routingStatus;
+      }
     }
+
+    // Step 2: ROUTING → ASSIGNED (via ASSIGN event)
+    const finalStatus = transitionLead(currentStatus, { type: 'ASSIGN' }, { leadId, workspaceId });
+
+    // BUG FIX #8: Wrap assignment + status update in a single transaction
+    // Previously three separate writes could leave partial state on crash
+    await this.prisma.$transaction([
+      this.prisma.leadAssignment.create({
+        data: {
+          leadId,
+          workspaceId,
+          workspaceUserId: candidate.workspaceUserId,
+          routingReason: candidate.reason,
+          routingScore: candidate.score,
+          isPrimary: true,
+        },
+      }),
+      this.prisma.lead.update({
+        where: { id: leadId, workspaceId },
+        data: {
+          assignedWorkspaceUserId: candidate.workspaceUserId,
+          status: finalStatus,
+        },
+      }),
+    ]);
 
     await this.eventStore.append({
       leadId,
@@ -90,9 +106,9 @@ export class LeadRoutingProcessor {
         reason: candidate.reason,
         score: candidate.score,
         previousStatus: lead.status,
-        newStatus,
+        newStatus: finalStatus,
       },
-      triggerSource: 'lead-routing-processor',
+      triggeredBy: 'lead-routing-processor',
     });
 
     await this.notificationService
@@ -111,7 +127,10 @@ export class LeadRoutingProcessor {
       routingReason: candidate.reason,
     });
 
-    logger.info({ leadId, workspaceId, assignedTo: candidate.workspaceUserId }, 'lead-routing: assigned successfully');
+    logger.info(
+      { leadId, workspaceId, assignedTo: candidate.workspaceUserId, previousStatus: lead.status, finalStatus },
+      'lead-routing: assigned successfully',
+    );
   }
 
   private async evaluateRules(

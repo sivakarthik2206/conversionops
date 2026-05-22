@@ -6,7 +6,7 @@ import { CalComClient } from '@conversionops/integrations';
 import { MessageRole, NotificationType } from '@conversionops/db';
 import { isQuietHours, validateConsent } from '@conversionops/compliance';
 import { TwilioClient } from '@conversionops/integrations';
-import { queues, NotificationService } from '@conversionops/orchestration';
+import { queues, NotificationService, transitionLead } from '@conversionops/orchestration';
 import { PrismaService } from '../modules/prisma/prisma.service';
 import { RealtimeEmitterService } from '../modules/realtime/realtime-emitter.service';
 
@@ -117,7 +117,16 @@ export class AppointmentBookingProcessor {
       if (!smsResult.ok) {
         logger.error({ err: smsResult.error, leadId }, 'appointment-booking: SMS failed');
       } else {
-        logger.info({ leadId, workspaceId }, 'appointment-booking: booking link sent');
+        // BUG FIX #13: Transition lead to APPOINTMENT_REQUESTED after booking link is sent.
+        // Previously the lead status was never advanced here.
+        const newStatus = transitionLead(lead.status, { type: 'REQUEST_APPOINTMENT' }, { leadId, workspaceId });
+        if (newStatus !== lead.status) {
+          await this.prisma.lead.update({
+            where: { id: leadId, workspaceId },
+            data: { status: newStatus },
+          });
+        }
+        logger.info({ leadId, workspaceId, newStatus }, 'appointment-booking: booking link sent');
       }
     } catch (err) {
       logger.error({ err, leadId, workspaceId }, 'appointment-booking: processing error');

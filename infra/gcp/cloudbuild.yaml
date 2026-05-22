@@ -1,81 +1,216 @@
-steps:
-  - name: 'node:20-alpine'
-    entrypoint: sh
-    args: ['-c', 'npm install -g pnpm@9 && pnpm install --frozen-lockfile']
-    id: install
+################################################################################
+# ConversionOps — Cloud Build CI/CD Pipeline
+# Trigger: push to main branch
+# Deploys: API → Worker (migration runs before API deploy)
+# Rollback: gcloud run revisions describe + gcloud run services update-traffic
+################################################################################
 
+steps:
+  ###############################################################################
+  # 1. INSTALL — shared across quality gates
+  ###############################################################################
   - name: 'node:20-alpine'
+    id: install
     entrypoint: sh
-    args: ['-c', 'npm install -g pnpm@9 && pnpm run type-check']
+    args:
+      - '-c'
+      - 'npm install -g pnpm@9 --quiet && pnpm install --frozen-lockfile'
+
+  ###############################################################################
+  # 2. QUALITY GATES — run in parallel after install
+  ###############################################################################
+  - name: 'node:20-alpine'
     id: type-check
+    entrypoint: sh
+    args: ['-c', 'npm install -g pnpm@9 --quiet && pnpm run type-check']
     waitFor: ['install']
 
   - name: 'node:20-alpine'
+    id: lint
     entrypoint: sh
-    args: ['-c', 'npm install -g pnpm@9 && pnpm run test']
+    args: ['-c', 'npm install -g pnpm@9 --quiet && pnpm run lint']
+    waitFor: ['install']
+
+  - name: 'node:20-alpine'
     id: test
-    waitFor: ['type-check']
+    entrypoint: sh
+    args: ['-c', 'npm install -g pnpm@9 --quiet && pnpm run test']
+    waitFor: ['type-check', 'lint']
+    env:
+      - 'NODE_ENV=test'
+      - 'DATABASE_URL=postgresql://conversionops:testpass@localhost:5432/conversionops_test'
+      - 'REDIS_URL=redis://localhost:6379'
 
+  ###############################################################################
+  # 3. BUILD DOCKER IMAGES — in parallel after tests pass
+  ###############################################################################
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:$COMMIT_SHA', '-f', 'apps/api/Dockerfile', '.']
     id: build-api
+    args:
+      - 'build'
+      - '--cache-from=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:latest'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:$COMMIT_SHA'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:latest'
+      - '-f'
+      - 'apps/api/Dockerfile'
+      - '.'
     waitFor: ['test']
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:$COMMIT_SHA', '-f', 'apps/worker/Dockerfile', '.']
     id: build-worker
+    args:
+      - 'build'
+      - '--cache-from=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:latest'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:$COMMIT_SHA'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:latest'
+      - '-f'
+      - 'apps/worker/Dockerfile'
+      - '.'
     waitFor: ['test']
 
+  ###############################################################################
+  # 4. PUSH IMAGES — in parallel
+  ###############################################################################
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:$COMMIT_SHA']
     id: push-api
+    args: ['push', '--all-tags', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api']
     waitFor: ['build-api']
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:$COMMIT_SHA']
     id: push-worker
+    args: ['push', '--all-tags', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker']
     waitFor: ['build-worker']
 
+  ###############################################################################
+  # 5. DATABASE MIGRATION — runs before API deploy, after image push
+  #    Uses Cloud SQL Proxy for secure connectivity
+  ###############################################################################
   - name: 'gcr.io/cloud-builders/gcloud'
+    id: migrate
     entrypoint: sh
     args:
       - '-c'
       - |
+        set -e
+        echo "Downloading Cloud SQL Proxy..."
         wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.1/cloud-sql-proxy.linux.amd64 -O cloud-sql-proxy
         chmod +x cloud-sql-proxy
-        ./cloud-sql-proxy $_DB_INSTANCE &
+
+        echo "Starting Cloud SQL Proxy for migration..."
+        ./cloud-sql-proxy --port=5432 $_DB_INSTANCE &
+        PROXY_PID=$!
         sleep 5
-        npm install -g pnpm@9
+
+        echo "Running Prisma migrations..."
+        npm install -g pnpm@9 --quiet
         DATABASE_URL="$$DATABASE_URL" pnpm --filter @conversionops/db exec prisma migrate deploy
-    id: migrate
-    waitFor: ['push-api']
+
+        echo "Migration complete. Stopping proxy..."
+        kill $PROXY_PID 2>/dev/null || true
+    waitFor: ['push-api', 'push-worker']
     secretEnv: ['DATABASE_URL']
 
+  ###############################################################################
+  # 6. DEPLOY API — zero-downtime rolling deploy
+  #    Cloud Run handles rolling by default; --no-traffic staging pattern
+  ###############################################################################
   - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'conversionops-api'
-      - '--image=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:$COMMIT_SHA'
-      - '--region=$_REGION'
-      - '--platform=managed'
-      - '--service-account=$_SA_EMAIL'
-      - '--allow-unauthenticated'
     id: deploy-api
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Deploying API revision $COMMIT_SHA..."
+        gcloud run deploy conversionops-api \
+          --image=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:$COMMIT_SHA \
+          --region=$_REGION \
+          --platform=managed \
+          --service-account=$_SA_EMAIL \
+          --allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=10 \
+          --concurrency=80 \
+          --cpu=1 \
+          --memory=512Mi \
+          --timeout=60 \
+          --no-cpu-throttling \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,MAGIC_LINK_SECRET=MAGIC_LINK_SECRET:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest,RESEND_API_KEY=RESEND_API_KEY:latest,ADMIN_API_KEY=ADMIN_API_KEY:latest,CALCOM_WEBHOOK_SECRET=CALCOM_WEBHOOK_SECRET:latest \
+          --set-env-vars=NODE_ENV=production,PORT=3001,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001,API_BASE_URL=https://api.conversionops.in \
+          --tag=commit-$SHORT_SHA \
+          --revision-suffix=$SHORT_SHA
+        echo "API deployed successfully"
     waitFor: ['migrate']
 
+  ###############################################################################
+  # 7. POST-DEPLOY SMOKE TEST — validates API is live before deploying worker
+  ###############################################################################
   - name: 'gcr.io/cloud-builders/gcloud'
+    id: smoke-test
+    entrypoint: sh
     args:
-      - 'run'
-      - 'deploy'
-      - 'conversionops-worker'
-      - '--image=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:$COMMIT_SHA'
-      - '--region=$_REGION'
-      - '--platform=managed'
-      - '--service-account=$_SA_EMAIL'
-      - '--no-allow-unauthenticated'
+      - '-c'
+      - |
+        set -e
+        echo "Waiting 15s for API to stabilize..."
+        sleep 15
+
+        API_URL=$(gcloud run services describe conversionops-api --region=$_REGION --format='value(status.url)')
+        echo "Testing $API_URL/v1/health/live ..."
+
+        RESPONSE=$(curl -sf --max-time 10 "$API_URL/v1/health/live" 2>&1)
+        if echo "$RESPONSE" | grep -q '"alive":true'; then
+          echo "Liveness check PASSED"
+        else
+          echo "Liveness check FAILED: $RESPONSE"
+          exit 1
+        fi
+
+        RESPONSE=$(curl -sf --max-time 15 "$API_URL/v1/health/ready" 2>&1)
+        if echo "$RESPONSE" | grep -q '"ready":true'; then
+          echo "Readiness check PASSED"
+        else
+          echo "Readiness check FAILED: $RESPONSE"
+          echo "Rolling back API to previous revision..."
+          PREV=$(gcloud run revisions list --service=conversionops-api --region=$_REGION --format='value(name)' --sort-by=~createdAt --limit=2 | tail -n1)
+          gcloud run services update-traffic conversionops-api --region=$_REGION --to-revisions=$PREV=100
+          exit 1
+        fi
+    waitFor: ['deploy-api']
+
+  ###############################################################################
+  # 8. DEPLOY WORKER — only after API smoke test passes
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
     id: deploy-worker
-    waitFor: ['push-worker']
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Deploying Worker revision $COMMIT_SHA..."
+        gcloud run deploy conversionops-worker \
+          --image=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:$COMMIT_SHA \
+          --region=$_REGION \
+          --platform=managed \
+          --service-account=$_SA_EMAIL \
+          --no-allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=3 \
+          --concurrency=1 \
+          --cpu=2 \
+          --memory=1Gi \
+          --timeout=300 \
+          --no-cpu-throttling \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest,FUB_API_KEY=FUB_API_KEY:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001 \
+          --revision-suffix=$SHORT_SHA
+        echo "Worker deployed successfully"
+    waitFor: ['smoke-test']
 
 substitutions:
   _AR_REGION: us-central1
@@ -91,3 +226,5 @@ availableSecrets:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+  substitutionOption: ALLOW_LOOSE

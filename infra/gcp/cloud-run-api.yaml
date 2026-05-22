@@ -98,13 +98,23 @@ spec:
               name: http1
           livenessProbe:
             httpGet:
-              path: /health
+              path: /v1/health/live
               port: 3001
             initialDelaySeconds: 10
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/health/ready
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           startupProbe:
             httpGet:
-              path: /health
+              path: /v1/health/live
               port: 3001
             initialDelaySeconds: 5
             periodSeconds: 5
