@@ -6,6 +6,7 @@ import { apiClient } from '@/lib/api-client';
 import { useLeads } from '@/hooks/useLeads';
 import { useConversations } from '@/hooks/useConversations';
 import { Icon } from '@/components/Icon';
+import { CountUp } from '@/components/CountUp';
 import Link from 'next/link';
 
 interface WorkspaceHealth {
@@ -13,6 +14,11 @@ interface WorkspaceHealth {
   qualifiedRate: number;
   appointmentsBooked: number;
   avgResponseMs: number;
+}
+
+interface SystemHealth {
+  status: 'healthy' | 'degraded' | 'down';
+  services: { database: string; redis: string; vertexAi: string };
 }
 
 function timeAgo(date: string) {
@@ -45,6 +51,12 @@ export default function OverviewPage() {
     queryFn: () => apiClient.get('/workspaces/me/health'),
   });
 
+  const { data: systemHealth } = useQuery<SystemHealth>({
+    queryKey: ['system-health'],
+    queryFn: () => apiClient.get('/health'),
+    refetchInterval: 30_000,
+  });
+
   const { conversations, isLoading: convsLoading } = useConversations({ limit: 5 });
   const { leads } = useLeads({ limit: 50 });
 
@@ -54,19 +66,21 @@ export default function OverviewPage() {
   }, {});
   const totalLeads = leads.length || 1;
 
-  const metrics = [
+  const metrics: MetricCardProps[] = [
     {
       label: 'Total leads',
       value: health?.totalLeads ?? 0,
-      icon: 'users' as const,
+      icon: 'users',
       color: 'var(--accent)',
       trend: '+12%',
       trendPositive: true,
     },
     {
       label: 'Qualified rate',
-      value: `${(health?.qualifiedRate ?? 0).toFixed(1)}%`,
-      icon: 'target' as const,
+      value: health?.qualifiedRate ?? 0,
+      decimals: 1,
+      suffix: '%',
+      icon: 'target',
       color: 'var(--green)',
       trend: '+8%',
       trendPositive: true,
@@ -74,15 +88,18 @@ export default function OverviewPage() {
     {
       label: 'Appointments',
       value: health?.appointmentsBooked ?? 0,
-      icon: 'calendar' as const,
+      icon: 'calendar',
       color: 'var(--purple)',
       trend: '+5',
       trendPositive: true,
     },
     {
       label: 'Avg response',
-      value: health?.avgResponseMs ? `${(health.avgResponseMs / 1000).toFixed(1)}s` : '—',
-      icon: 'clock' as const,
+      value: health?.avgResponseMs ? health.avgResponseMs / 1000 : null,
+      decimals: 1,
+      suffix: 's',
+      display: '—',
+      icon: 'clock',
       color: 'var(--blue)',
       trend: '−3s',
       trendPositive: true,
@@ -111,6 +128,66 @@ export default function OverviewPage() {
           </span>
         </h1>
       </div>
+
+      {/* System health strip */}
+      {systemHealth && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            marginBottom: 20,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 16,
+            padding: '7px 14px',
+            borderRadius: 10,
+            background: systemHealth.status === 'healthy'
+              ? 'rgba(77,255,165,0.06)'
+              : systemHealth.status === 'degraded'
+                ? 'rgba(255,181,71,0.06)'
+                : 'rgba(255,92,92,0.06)',
+            border: `1px solid ${
+              systemHealth.status === 'healthy' ? 'rgba(77,255,165,0.20)'
+              : systemHealth.status === 'degraded' ? 'rgba(255,181,71,0.20)'
+              : 'rgba(255,92,92,0.20)'}`,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: systemHealth.status === 'healthy' ? 'var(--green)' : systemHealth.status === 'degraded' ? 'var(--amber)' : 'var(--red)',
+              boxShadow: `0 0 6px ${systemHealth.status === 'healthy' ? 'var(--green)' : systemHealth.status === 'degraded' ? 'var(--amber)' : 'var(--red)'}`,
+            }} />
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: systemHealth.status === 'healthy' ? 'var(--green)' : systemHealth.status === 'degraded' ? 'var(--amber)' : 'var(--red)',
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+            }}>
+              {systemHealth.status}
+            </span>
+          </div>
+          <span style={{ width: 1, height: 14, background: 'var(--border)' }} />
+          {Object.entries(systemHealth.services).map(([svc, status]) => (
+            <div key={svc} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: status === 'healthy' ? 'var(--green)' : status === 'unconfigured' ? 'var(--text-4)' : 'var(--red)',
+              }} />
+              <span style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {svc.replace(/([A-Z])/g, ' $1').toLowerCase().trim()}
+              </span>
+            </div>
+          ))}
+        </motion.div>
+      )}
 
       {/* Metric grid */}
       <div
@@ -258,7 +335,7 @@ export default function OverviewPage() {
                         {meta.label}
                       </span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontFamily: "'JetBrains Mono', monospace" }}>
-                        {count}
+                        <CountUp value={count} />
                       </span>
                     </div>
                     <div style={{ height: 4, borderRadius: 100, background: 'var(--bg-4)', overflow: 'hidden' }}>
@@ -306,9 +383,21 @@ function CardHeader({ icon, title, action }: { icon: Parameters<typeof Icon>[0][
   );
 }
 
+interface MetricCardProps {
+  label: string;
+  value: number | null;
+  display?: string;
+  decimals?: number;
+  suffix?: string;
+  icon: Parameters<typeof Icon>[0]['name'];
+  color: string;
+  trend?: string;
+  trendPositive?: boolean;
+}
+
 function MetricCard({
-  label, value, icon, color, trend, trendPositive,
-}: { label: string; value: string | number; icon: Parameters<typeof Icon>[0]['name']; color: string; trend?: string; trendPositive?: boolean }) {
+  label, value, display, decimals, suffix, icon, color, trend, trendPositive,
+}: MetricCardProps) {
   return (
     <div
       className="surface-card"
@@ -387,7 +476,7 @@ function MetricCard({
           fontFeatureSettings: '"tnum"',
         }}
       >
-        {value}
+        {value === null ? (display ?? '—') : <CountUp value={value} decimals={decimals ?? 0} suffix={suffix ?? ''} />}
       </div>
     </div>
   );

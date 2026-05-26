@@ -1,9 +1,40 @@
 'use client';
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Badge, StatusBadge, Skeleton } from '@conversionops/ui';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Badge, StatusBadge, Skeleton, Modal, Button, useToast } from '@conversionops/ui';
 import { useLead } from '@/hooks/useLeads';
 import { Icon } from '@/components/Icon';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+import { useState } from 'react';
+
+interface LeadDetail {
+  id: string;
+  workspaceId: string;
+  source: string;
+  status: string;
+  tier: string;
+  score: number;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  qualification: Record<string, string>;
+  assignedWorkspaceUserId: string | null;
+  reactivationCount: number;
+  latestConversationId: string | null;
+  aiPausedForLead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LeadEvent {
+  id: string;
+  type: string;
+  payload: Record<string, unknown>;
+  triggeredBy: string | null;
+  occurredAt: string;
+  sequence: number;
+}
 
 const QUAL_FIELDS = ['intent', 'area', 'propertyType', 'budget', 'timeline', 'financing', 'urgency'] as const;
 const QUAL_LABELS: Record<string, string> = {
@@ -15,6 +46,8 @@ const QUAL_LABELS: Record<string, string> = {
   financing: 'Financing',
   urgency: 'Urgency',
 };
+
+const REACTIVATABLE_STATUSES = ['DORMANT', 'COLD', 'DISQUALIFIED'];
 
 function ScoreRing({ score }: { score: number }) {
   const size = 96;
@@ -76,6 +109,7 @@ const EVENT_META: Record<string, { color: string; icon: Parameters<typeof Icon>[
   'lead.converted':                { color: 'var(--accent)', icon: 'star' },
   'lead.opted-out':                { color: 'var(--red)',    icon: 'x' },
   'lead.dormant':                  { color: 'var(--text-3)', icon: 'minus' },
+  'lead.reactivated':              { color: 'var(--purple)', icon: 'reload' },
 };
 
 function timeAgo(date: string) {
@@ -89,8 +123,35 @@ function timeAgo(date: string) {
 export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { addToast } = useToast();
+  const qc = useQueryClient();
   const leadId = params['id'] as string;
-  const { lead, isLoading } = useLead(leadId);
+
+  const [reactivateModal, setReactivateModal] = useState(false);
+
+  const { data: lead, isLoading } = useQuery<LeadDetail>({
+    queryKey: ['lead-detail', leadId],
+    queryFn: () => apiClient.get<LeadDetail>(`/leads/${leadId}`),
+    enabled: !!leadId,
+  });
+
+  const { data: events = [], isLoading: eventsLoading } = useQuery<LeadEvent[]>({
+    queryKey: ['lead-events', leadId],
+    queryFn: () => apiClient.get<LeadEvent[]>(`/leads/${leadId}/events`),
+    enabled: !!leadId,
+  });
+
+  const reactivate = useMutation({
+    mutationFn: () => apiClient.post(`/leads/${leadId}/reactivate`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['lead-detail', leadId] });
+      void qc.invalidateQueries({ queryKey: ['lead-events', leadId] });
+      void qc.invalidateQueries({ queryKey: ['leads'] });
+      addToast('Lead reactivated — AI will reach out within 60 seconds', 'success');
+      setReactivateModal(false);
+    },
+    onError: () => { addToast('Failed to reactivate lead', 'error'); },
+  });
 
   if (isLoading) {
     return (
@@ -99,17 +160,23 @@ export default function LeadDetailPage() {
       </div>
     );
   }
+
   if (!lead) {
-    return <div style={{ color: 'var(--text-2)' }}>Lead not found</div>;
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-2)' }}>
+        <Icon name="x-circle" size={32} stroke={1.5} style={{ color: 'var(--red)', marginBottom: 12 }} />
+        <p>Lead not found</p>
+        <button onClick={() => router.push('/leads')} className="btn-ghost" style={{ marginTop: 12 }}>
+          Back to leads
+        </button>
+      </div>
+    );
   }
 
   const qual = (lead.qualification as Record<string, string> | undefined) ?? {};
   const answeredCount = QUAL_FIELDS.filter(f => qual[f]).length;
   const qualPct = (answeredCount / QUAL_FIELDS.length) * 100;
-
-  const events = [
-    { id: '1', type: 'lead.created', occurredAt: lead.createdAt },
-  ];
+  const canReactivate = REACTIVATABLE_STATUSES.includes(lead.status);
 
   return (
     <div>
@@ -165,7 +232,7 @@ export default function LeadDetailPage() {
         <ScoreRing score={lead.score} />
 
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          <p className="eyebrow" style={{ color: 'var(--text-3)', marginBottom: 4 }}>{lead.source.replace('_', ' ')}</p>
+          <p className="eyebrow" style={{ color: 'var(--text-3)', marginBottom: 4 }}>{lead.source.replace(/_/g, ' ')}</p>
           <h1
             className="serif"
             style={{
@@ -180,7 +247,7 @@ export default function LeadDetailPage() {
             {lead.name ?? lead.phone ?? 'Unknown lead'}
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <Badge variant="info" size="sm">{lead.source.replace('_', ' ')}</Badge>
+            <Badge variant="info" size="sm">{lead.source.replace(/_/g, ' ')}</Badge>
             <StatusBadge status={lead.status} />
             {lead.phone && (
               <span style={{ fontSize: 12, color: 'var(--text-3)', display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -197,6 +264,7 @@ export default function LeadDetailPage() {
           </div>
         </div>
 
+        {/* Qualification progress */}
         <div style={{ textAlign: 'right', position: 'relative', minWidth: 160 }}>
           <p className="eyebrow" style={{ color: 'var(--text-3)', marginBottom: 8 }}>Qualification</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -212,6 +280,120 @@ export default function LeadDetailPage() {
               {answeredCount}/{QUAL_FIELDS.length}
             </span>
           </div>
+          {lead.reactivationCount > 0 && (
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--purple)', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+              <Icon name="reload" size={10} stroke={2} />
+              {lead.reactivationCount} reactivation{lead.reactivationCount > 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Actions bar */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          marginBottom: 16,
+          padding: '14px 18px',
+          background: 'var(--bg-2)',
+          borderRadius: 12,
+          border: '1px solid var(--border)',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'JetBrains Mono', monospace", marginRight: 4 }}>
+          Actions
+        </span>
+
+        {lead.latestConversationId && (
+          <button
+            onClick={() => router.push(`/conversations?id=${lead.latestConversationId}`)}
+            className="btn-ghost"
+            style={{ fontSize: 12, height: 34, padding: '0 14px' }}
+          >
+            <Icon name="message" size={13} stroke={1.8} />
+            View conversation
+          </button>
+        )}
+
+        {canReactivate && (
+          <button
+            onClick={() => setReactivateModal(true)}
+            className="btn-ghost"
+            style={{ fontSize: 12, height: 34, padding: '0 14px', color: 'var(--purple)', borderColor: 'rgba(179,155,255,0.30)', background: 'rgba(179,155,255,0.08)' }}
+          >
+            <Icon name="reload" size={13} stroke={1.8} />
+            Reactivate
+          </button>
+        )}
+
+        {lead.phone && (
+          <a
+            href={`tel:${lead.phone}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              height: 34,
+              padding: '0 14px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              color: 'var(--text-2)',
+              textDecoration: 'none',
+              transition: 'all 0.2s',
+              background: 'transparent',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; }}
+          >
+            <Icon name="phone" size={12} stroke={1.8} />
+            Call
+          </a>
+        )}
+
+        {lead.latestConversationId && (
+          <button
+            onClick={() => router.push(`/conversations/${lead.latestConversationId}`)}
+            className="btn-ghost"
+            style={{ fontSize: 12, height: 34, padding: '0 14px' }}
+          >
+            <Icon name="external" size={12} stroke={1.8} />
+            Full thread
+          </button>
+        )}
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 10,
+              color: lead.aiPausedForLead ? 'var(--amber)' : 'var(--green)',
+              padding: '3px 8px',
+              borderRadius: 100,
+              background: lead.aiPausedForLead ? 'rgba(255,181,71,0.10)' : 'rgba(77,255,165,0.10)',
+              border: `1px solid ${lead.aiPausedForLead ? 'rgba(255,181,71,0.25)' : 'rgba(77,255,165,0.25)'}`,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}
+          >
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: lead.aiPausedForLead ? 'var(--amber)' : 'var(--green)',
+                boxShadow: `0 0 4px ${lead.aiPausedForLead ? 'var(--amber)' : 'var(--green)'}`,
+              }}
+            />
+            AI {lead.aiPausedForLead ? 'paused' : 'active'}
+          </span>
         </div>
       </div>
 
@@ -279,53 +461,124 @@ export default function LeadDetailPage() {
             <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, letterSpacing: '-0.005em' }}>
               Event timeline
             </h2>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {events.length} event{events.length !== 1 ? 's' : ''}
+            </span>
           </div>
-          <div style={{ position: 'relative', paddingLeft: 18 }}>
-            <div
-              style={{
-                position: 'absolute',
-                left: 7,
-                top: 8,
-                bottom: 8,
-                width: 1,
-                background: 'linear-gradient(180deg, var(--accent-glow), transparent)',
-              }}
-            />
-            {events.map((evt) => {
-              const meta = EVENT_META[evt.type] ?? { color: 'var(--text-3)', icon: 'plus' as const };
-              return (
-                <div key={evt.id} style={{ position: 'relative', paddingBottom: 16, paddingLeft: 16 }}>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: -3,
-                      top: 2,
-                      width: 18,
-                      height: 18,
-                      borderRadius: '50%',
-                      background: 'var(--bg-2)',
-                      border: `2px solid ${meta.color}`,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: meta.color,
-                      boxShadow: `0 0 12px ${meta.color}44`,
-                    }}
-                  >
-                    <Icon name={meta.icon} size={9} stroke={2.4} />
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
-                    {evt.type.replace(/\./g, ' ').replace(/^lead /, '')}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
-                    {timeAgo(evt.occurredAt)}
+          {eventsLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, paddingLeft: 18 }}>
+                  <Skeleton variant="circle" width={18} height={18} style={{ flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <Skeleton variant="text" width="60%" style={{ marginBottom: 4 }} />
+                    <Skeleton variant="text" width="30%" />
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : events.length === 0 ? (
+            <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-4)' }}>
+              No events recorded yet
+            </div>
+          ) : (
+            <div style={{ position: 'relative', paddingLeft: 18 }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 7,
+                  top: 8,
+                  bottom: 8,
+                  width: 1,
+                  background: 'linear-gradient(180deg, var(--accent), transparent)',
+                  opacity: 0.4,
+                }}
+              />
+              {events.map((evt) => {
+                const meta = EVENT_META[evt.type] ?? { color: 'var(--text-3)', icon: 'plus' as const };
+                return (
+                  <div key={evt.id} style={{ position: 'relative', paddingBottom: 16, paddingLeft: 16 }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: -3,
+                        top: 2,
+                        width: 18,
+                        height: 18,
+                        borderRadius: '50%',
+                        background: 'var(--bg-2)',
+                        border: `2px solid ${meta.color}`,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: meta.color,
+                        boxShadow: `0 0 12px ${meta.color}44`,
+                      }}
+                    >
+                      <Icon name={meta.icon} size={9} stroke={2.4} />
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
+                      {evt.type.replace(/\./g, ' ').replace(/^lead /, '')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {timeAgo(evt.occurredAt)}
+                      </span>
+                      {evt.triggeredBy && (
+                        <span style={{ fontSize: 11, color: 'var(--text-5)', fontFamily: "'JetBrains Mono', monospace" }}>
+                          · {evt.triggeredBy}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Reactivate confirmation modal */}
+      <AnimatePresence>
+        {reactivateModal && (
+          <Modal open={reactivateModal} onClose={() => setReactivateModal(false)} title="Reactivate lead?">
+            <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 10, lineHeight: 1.6 }}>
+              The AI will send a personalised outreach message referencing{' '}
+              {lead.name ? <strong>{lead.name}&apos;s</strong> : 'their'} original search criteria.
+              Up to 3 reactivation attempts are allowed.
+            </p>
+            {lead.reactivationCount >= 2 && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: 8,
+                background: 'rgba(255,181,71,0.08)',
+                border: '1px solid rgba(255,181,71,0.25)',
+                color: 'var(--amber)',
+                fontSize: 12,
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                marginBottom: 16,
+              }}>
+                <Icon name="bolt" size={12} stroke={2} />
+                {3 - lead.reactivationCount} attempt{3 - lead.reactivationCount === 1 ? '' : 's'} remaining.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+              <Button variant="ghost" size="sm" onClick={() => setReactivateModal(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                loading={reactivate.isPending}
+                onClick={() => reactivate.mutate()}
+                style={{ background: 'rgba(179,155,255,0.15)', borderColor: 'rgba(179,155,255,0.40)', color: 'var(--purple)' }}
+              >
+                <Icon name="reload" size={12} stroke={2} />
+                Reactivate
+              </Button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
 
       <style>{`
         @media (max-width: 900px) { .lead-grid { grid-template-columns: 1fr !important; } }

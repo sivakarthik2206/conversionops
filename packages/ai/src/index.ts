@@ -9,7 +9,7 @@ export { buildResponsePrompt } from './prompts/response.prompt';
 export { runQualificationChain } from './chains/qualification.chain';
 export type { QualificationResult } from './chains/qualification.chain';
 
-export { calculateScore, getTier, updateLeadScore } from './scoring/lead-scorer';
+export { calculateScore, getTier, updateLeadScore, calculateScoreDetailed } from './scoring/lead-scorer';
 export type { LeadScoreBreakdown } from './scoring/lead-scorer';
 
 export { checkQuota, trackUsage, alertIfApproaching } from './governance/token-budget';

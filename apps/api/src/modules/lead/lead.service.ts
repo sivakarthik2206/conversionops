@@ -15,6 +15,8 @@ import { ListLeadsHandler } from './queries/list-leads.handler';
 import { ListLeadsQuery, LeadListDto } from './queries/list-leads.query';
 import { GetConversionFunnelHandler } from './queries/get-conversion-funnel.handler';
 import { GetConversionFunnelQuery, ConversionFunnelDto } from './queries/get-conversion-funnel.query';
+import { GetLeadEventsHandler } from './queries/get-lead-events.handler';
+import { GetLeadEventsQuery, LeadEventDto } from './queries/get-lead-events.query';
 
 @Injectable()
 export class LeadService {
@@ -26,6 +28,7 @@ export class LeadService {
     private readonly getHandler: GetLeadHandler,
     private readonly listHandler: ListLeadsHandler,
     private readonly funnelHandler: GetConversionFunnelHandler,
+    private readonly eventsHandler: GetLeadEventsHandler,
   ) {}
 
   createLead(cmd: CreateLeadCommand): Promise<Result<Lead>> {
@@ -54,5 +57,9 @@ export class LeadService {
 
   getConversionFunnel(workspaceId: string): Promise<Result<ConversionFunnelDto>> {
     return this.funnelHandler.execute(new GetConversionFunnelQuery(workspaceId));
+  }
+
+  getLeadEvents(leadId: string, workspaceId: string): Promise<Result<LeadEventDto[]>> {
+    return this.eventsHandler.execute(new GetLeadEventsQuery(leadId, workspaceId));
   }
 }

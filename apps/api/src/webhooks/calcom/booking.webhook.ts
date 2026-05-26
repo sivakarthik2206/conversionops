@@ -189,10 +189,38 @@ export class CalComWebhookController {
       logger.info({ leadId: lead.id, workspaceId: lead.workspaceId, bookingUid, newStatus }, 'calcom-webhook: appointment created');
     } else if (event.triggerEvent === 'BOOKING_CANCELLED') {
       // Tenant-scoped — never update appointments outside the resolved workspace.
+      const cancelled = await this.prisma.appointment.findFirst({
+        where: { externalBookingId: bookingUid, workspaceId },
+        include: { lead: { select: { id: true, name: true, assignedWorkspaceUserId: true, status: true } } },
+      });
+
       await this.prisma.appointment.updateMany({
         where: { externalBookingId: bookingUid, workspaceId },
         data: { status: 'CANCELLED' },
       });
+
+      // Revert lead status from APPOINTMENT_SCHEDULED back to QUALIFIED so AI can re-engage
+      if (cancelled?.lead && cancelled.lead.status === 'APPOINTMENT_SCHEDULED') {
+        await this.prisma.lead.update({
+          where: { id: cancelled.lead.id, workspaceId },
+          data: { status: 'QUALIFIED' },
+        });
+      }
+
+      // Notify assigned agent of the cancellation
+      if (cancelled?.lead?.assignedWorkspaceUserId) {
+        void queues.notification.add('appointment-cancelled', {
+          type: NotificationType.OPS_ALERT,
+          payload: {
+            message: `Appointment cancelled for ${cancelled.lead.name ?? 'a lead'} (booking ${bookingUid})`,
+            leadId: cancelled.lead.id,
+            bookingUid,
+            cancelledAt: new Date().toISOString(),
+          },
+          workspaceId,
+          recipientWorkspaceUserId: cancelled.lead.assignedWorkspaceUserId,
+        }, { removeOnComplete: 1000 });
+      }
 
       logger.info({ bookingUid, workspaceId }, 'calcom-webhook: appointment cancelled');
     }

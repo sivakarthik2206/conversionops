@@ -30,6 +30,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AppointmentModule } from './modules/appointment/appointment.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { RealtimeGateway } from './gateway/realtime.gateway';
 import { WorkspaceRoomsService } from './gateway/workspace.rooms';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
@@ -62,6 +63,7 @@ import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.we
     AppointmentModule,
     RoutingModule,
     AdminModule,
+    NotificationModule,
   ],
   controllers: [
     TwilioSMSWebhookController,

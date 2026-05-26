@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AdminGuard } from './admin.guard';
 import { logger } from '@conversionops/observability';
 import { VertexAIClient, buildSystemPrompt } from '@conversionops/ai';
+import { queues, QUEUE_NAMES } from '@conversionops/orchestration';
 
 @Controller('admin')
 @Public()
@@ -146,6 +147,111 @@ export class AdminController {
     });
 
     return { lead, leadEvents, workflowExecutions };
+  }
+
+  /** Returns audit log entries across all workspaces with optional filters. */
+  @Get('audit-logs')
+  async getAuditLogs(
+    @Query('action') action?: string,
+    @Query('resource') resource?: string,
+    @Query('workspaceId') workspaceId?: string,
+    @Query('limit') limitStr?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    const limit = Math.min(parseInt(limitStr ?? '50', 10), 200);
+    const entries = await this.prisma.auditLog.findMany({
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      where: {
+        deletedAt: null,
+        ...(action ? { action } : {}),
+        ...(resource ? { resource } : {}),
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+      include: {
+        workspace: { select: { id: true, name: true, slug: true } },
+        user: { select: { id: true, email: true } },
+      },
+      orderBy: { occurredAt: 'desc' },
+    });
+
+    const hasMore = entries.length > limit;
+    const items = hasMore ? entries.slice(0, -1) : entries;
+    return { items, nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null, total: items.length };
+  }
+
+  /** Returns BullMQ queue counts for all queues (waiting, active, completed, failed, delayed). */
+  @Get('queues')
+  async getQueueStats() {
+    const queueEntries = Object.entries(queues) as [string, (typeof queues)[keyof typeof queues]][];
+    const stats = await Promise.all(
+      queueEntries.map(async ([key, q]) => {
+        const [waiting, active, completed, failed, delayed] = await Promise.all([
+          q.getWaitingCount().catch(() => 0),
+          q.getActiveCount().catch(() => 0),
+          q.getCompletedCount().catch(() => 0),
+          q.getFailedCount().catch(() => 0),
+          q.getDelayedCount().catch(() => 0),
+        ]);
+        return { name: q.name, key, waiting, active, completed, failed, delayed };
+      }),
+    );
+    return { queues: stats };
+  }
+
+  /** Returns failed jobs for a single queue (DLQ view). */
+  @Get('queues/:name/failed')
+  async getFailedJobs(
+    @Param('name') name: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const limit = Math.min(parseInt(limitStr ?? '20', 10), 100);
+    const q = Object.values(queues).find(q => q.name === name);
+    if (!q) throw new NotFoundException(`Queue "${name}" not found`);
+    const jobs = await q.getFailed(0, limit - 1).catch(() => []);
+    return {
+      jobs: jobs.map(j => ({
+        id: j.id,
+        name: j.name,
+        data: j.data,
+        failedReason: j.failedReason,
+        attemptsMade: j.attemptsMade,
+        processedOn: j.processedOn,
+        timestamp: j.timestamp,
+      })),
+    };
+  }
+
+  /** Retries a single failed job — moves it back to waiting state. */
+  @Post('queues/:name/failed/:jobId/retry')
+  @HttpCode(HttpStatus.OK)
+  async retryFailedJob(
+    @Param('name') name: string,
+    @Param('jobId') jobId: string,
+  ) {
+    const q = Object.values(queues).find(q => q.name === name);
+    if (!q) throw new NotFoundException(`Queue "${name}" not found`);
+
+    const jobs = await q.getFailed(0, 1000).catch(() => []);
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) throw new NotFoundException(`Job "${jobId}" not found in failed queue`);
+
+    await job.retry();
+    logger.info({ queue: name, jobId }, 'admin: DLQ job retried');
+    return { ok: true, jobId, queue: name };
+  }
+
+  /** Retries ALL failed jobs in a queue (bulk retry). */
+  @Post('queues/:name/failed/retry-all')
+  @HttpCode(HttpStatus.OK)
+  async retryAllFailedJobs(@Param('name') name: string) {
+    const q = Object.values(queues).find(q => q.name === name);
+    if (!q) throw new NotFoundException(`Queue "${name}" not found`);
+
+    const jobs = await q.getFailed(0, 1000).catch(() => []);
+    await Promise.allSettled(jobs.map(j => j.retry()));
+    logger.info({ queue: name, count: jobs.length }, 'admin: DLQ bulk retry');
+    return { ok: true, retried: jobs.length, queue: name };
   }
 
   /**

@@ -11,11 +11,13 @@ interface Agent {
   userId: string;
   role: string;
   displayName?: string | null;
+  bio?: string | null;
   isAvailable: boolean;
   totalLeadsAssigned: number;
   conversionRate: number;
   languages: string[];
   serviceAreas: string[];
+  specializations: string[];
   user?: { name?: string | null; email: string; } | null;
 }
 
@@ -200,6 +202,27 @@ export default function AgentsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Specialisations / service areas / languages */}
+                  {(agent.specializations?.length > 0 || agent.serviceAreas?.length > 0 || agent.languages?.length > 0) && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {agent.languages?.filter(l => l !== 'en').map(lang => (
+                        <span key={lang} style={{ padding: '2px 7px', borderRadius: 4, background: 'rgba(90,163,255,0.10)', border: '1px solid rgba(90,163,255,0.25)', fontSize: 10, color: 'var(--blue)', fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+                          {lang.toUpperCase()}
+                        </span>
+                      ))}
+                      {agent.serviceAreas?.slice(0, 2).map(area => (
+                        <span key={area} style={{ padding: '2px 7px', borderRadius: 4, background: 'rgba(179,155,255,0.10)', border: '1px solid rgba(179,155,255,0.20)', fontSize: 10, color: 'var(--purple)' }}>
+                          {area}
+                        </span>
+                      ))}
+                      {agent.specializations?.slice(0, 2).map(spec => (
+                        <span key={spec} style={{ padding: '2px 7px', borderRadius: 4, background: 'var(--bg-3)', border: '1px solid var(--border)', fontSize: 10, color: 'var(--text-3)' }}>
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Footer */}
                   <div

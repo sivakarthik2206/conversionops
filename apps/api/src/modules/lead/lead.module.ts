@@ -8,6 +8,7 @@ import { ReactivateLeadHandler } from './commands/reactivate-lead.handler';
 import { GetLeadHandler } from './queries/get-lead.handler';
 import { ListLeadsHandler } from './queries/list-leads.handler';
 import { GetConversionFunnelHandler } from './queries/get-conversion-funnel.handler';
+import { GetLeadEventsHandler } from './queries/get-lead-events.handler';
 
 @Module({
   controllers: [LeadController],
@@ -20,6 +21,7 @@ import { GetConversionFunnelHandler } from './queries/get-conversion-funnel.hand
     GetLeadHandler,
     ListLeadsHandler,
     GetConversionFunnelHandler,
+    GetLeadEventsHandler,
   ],
   exports: [LeadService],
 })

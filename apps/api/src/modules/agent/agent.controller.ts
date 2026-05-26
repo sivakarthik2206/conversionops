@@ -29,12 +29,27 @@ const InviteSchema = z.object({
 
 const UpdateSchema = z.object({
   role: z.enum(['ADMIN', 'AGENT', 'VIEWER']).optional(),
-  displayName: z.string().optional(),
+  displayName: z.string().max(80).optional(),
+  bio: z.string().max(500).optional(),
   isAvailable: z.boolean().optional(),
+  unavailableUntil: z.string().datetime().optional().nullable(),
+  specializations: z.array(z.string().max(60)).max(10).optional(),
+  languages: z.array(z.string().max(20)).max(10).optional(),
+  serviceAreas: z.array(z.string().max(80)).max(20).optional(),
+  notifyOnNewLead: z.boolean().optional(),
+  notifyOnHotLead: z.boolean().optional(),
+  notifyOnEscalation: z.boolean().optional(),
+});
+
+const NotificationPrefsSchema = z.object({
+  notifyOnNewLead: z.boolean().optional(),
+  notifyOnHotLead: z.boolean().optional(),
+  notifyOnEscalation: z.boolean().optional(),
 });
 
 type InviteDto = z.infer<typeof InviteSchema>;
 type UpdateDto = z.infer<typeof UpdateSchema>;
+type NotificationPrefsDto = z.infer<typeof NotificationPrefsSchema>;
 
 @Controller('agents')
 @UseGuards(AuthGuard, RbacGuard)
@@ -67,6 +82,31 @@ export class AgentController {
     return result.value;
   }
 
+  @Get('me/notification-prefs')
+  async getMyNotificationPrefs(
+    @CurrentUser() user: AuthenticatedUser,
+    @CurrentWorkspace() workspace: AuthenticatedWorkspace,
+  ) {
+    const result = await this.agentService.getMyWorkspaceUserId(user.id, workspace.id);
+    if (!result.ok) throw new NotFoundException('Agent record not found');
+    const prefs = await this.agentService.getNotificationPrefs(result.value, workspace.id);
+    if (!prefs.ok) throw new NotFoundException('Agent record not found');
+    return prefs.value;
+  }
+
+  @Patch('me/notification-prefs')
+  async updateMyNotificationPrefs(
+    @CurrentUser() user: AuthenticatedUser,
+    @CurrentWorkspace() workspace: AuthenticatedWorkspace,
+    @Body(new ZodValidationPipe(NotificationPrefsSchema)) dto: NotificationPrefsDto,
+  ) {
+    const result = await this.agentService.getMyWorkspaceUserId(user.id, workspace.id);
+    if (!result.ok) throw new NotFoundException('Agent record not found');
+    const updated = await this.agentService.updateNotificationPrefs(result.value, workspace.id, dto);
+    if (!updated.ok) throw new UnprocessableEntityException(updated.error.message);
+    return updated.value;
+  }
+
   @Patch(':id')
   @RequirePermission('agent:write')
   async updateAgent(
@@ -80,6 +120,7 @@ export class AgentController {
       workspaceId: workspace.id,
       updatedByUserId: user.id,
       ...dto,
+      unavailableUntil: dto.unavailableUntil === null ? null : dto.unavailableUntil ? new Date(dto.unavailableUntil) : undefined,
     });
     if (!result.ok) {
       if (result.error instanceof TenantLeakageError) throw new NotFoundException('Agent not found');

@@ -2,6 +2,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { Reveal } from '@/components/Reveal';
 import { Icon } from '@/components/Icon';
+import { CalEmbed } from '@/components/CalEmbed';
 
 export const metadata = {
   title: 'Book a Demo — ConversionOps',
@@ -208,79 +209,85 @@ export default function BookPage() {
                     Times available in your timezone. Most teams ship the same day.
                   </p>
 
-                  {/* Slot mockup */}
-                  <div
-                    style={{
-                      background: 'var(--bg-3)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 14,
-                      padding: 16,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                      marginBottom: 20,
-                    }}
-                  >
-                    {[
-                      { day: 'Today',    times: ['2:30 PM', '4:00 PM'] },
-                      { day: 'Tomorrow', times: ['10:00 AM', '1:30 PM', '5:00 PM'] },
-                    ].map(slot => (
-                      <div key={slot.day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Live Cal.com embed when configured; static slot mockup + email fallback otherwise */}
+                  <CalEmbed
+                    fallback={
+                      <>
                         <div
                           style={{
-                            width: 80,
-                            fontSize: 12,
-                            color: 'var(--text-2)',
-                            fontWeight: 500,
+                            background: 'var(--bg-3)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 14,
+                            padding: 16,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                            marginBottom: 20,
                           }}
                         >
-                          {slot.day}
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
-                          {slot.times.map(t => (
-                            <span
-                              key={t}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: 8,
-                                background: 'var(--bg-4)',
-                                border: '1px solid var(--border-light)',
-                                color: 'var(--text-2)',
-                                fontSize: 12,
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontWeight: 500,
-                              }}
-                            >
-                              {t}
-                            </span>
+                          {[
+                            { day: 'Today',    times: ['2:30 PM', '4:00 PM'] },
+                            { day: 'Tomorrow', times: ['10:00 AM', '1:30 PM', '5:00 PM'] },
+                          ].map(slot => (
+                            <div key={slot.day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div
+                                style={{
+                                  width: 80,
+                                  fontSize: 12,
+                                  color: 'var(--text-2)',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {slot.day}
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                                {slot.times.map(t => (
+                                  <span
+                                    key={t}
+                                    style={{
+                                      padding: '6px 10px',
+                                      borderRadius: 8,
+                                      background: 'var(--bg-4)',
+                                      border: '1px solid var(--border-light)',
+                                      color: 'var(--text-2)',
+                                      fontSize: 12,
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
-                      </div>
-                    ))}
-                  </div>
 
-                  <a
-                    href="mailto:hello@conversionops.in?subject=Demo%20request&body=Hi%20-%20I%27d%20like%20to%20book%20a%20demo.%20Best%20times%3A%20"
-                    className="btn-primary"
-                    style={{ width: '100%', justifyContent: 'center' }}
-                  >
-                    <Icon name="mail" size={14} stroke={2} />
-                    Email us to confirm
-                    <Icon name="arrow-right" size={14} stroke={2.2} />
-                  </a>
+                        <a
+                          href="mailto:hello@conversionops.in?subject=Demo%20request&body=Hi%20-%20I%27d%20like%20to%20book%20a%20demo.%20Best%20times%3A%20"
+                          className="btn-primary"
+                          style={{ width: '100%', justifyContent: 'center' }}
+                        >
+                          <Icon name="mail" size={14} stroke={2} />
+                          Email us to confirm
+                          <Icon name="arrow-right" size={14} stroke={2.2} />
+                        </a>
 
-                  <p
-                    style={{
-                      marginTop: 14,
-                      fontSize: 11,
-                      color: 'var(--text-4)',
-                      textAlign: 'center',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    or reply &lt; 4 business hours
-                  </p>
+                        <p
+                          style={{
+                            marginTop: 14,
+                            fontSize: 11,
+                            color: 'var(--text-4)',
+                            textAlign: 'center',
+                            fontFamily: "'JetBrains Mono', monospace",
+                            letterSpacing: '0.04em',
+                          }}
+                        >
+                          or reply &lt; 4 business hours
+                        </p>
+                      </>
+                    }
+                  />
                 </div>
               </div>
             </Reveal>

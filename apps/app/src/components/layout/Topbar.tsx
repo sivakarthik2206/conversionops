@@ -1,8 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar } from '@conversionops/ui';
 import { Icon } from '@/components/Icon';
+import { useLiveActivity } from '@/hooks/useRealtime';
+import type { ConnectionState } from '@/hooks/useRealtime';
 
 const PAGE_META: Record<string, { title: string; eyebrow?: string }> = {
   '/':                       { title: 'Overview',           eyebrow: 'Dashboard' },
@@ -13,6 +16,10 @@ const PAGE_META: Record<string, { title: string; eyebrow?: string }> = {
   '/routing':                { title: 'Routing Rules',       eyebrow: 'Operations' },
   '/agents':                 { title: 'Agents',              eyebrow: 'Team' },
   '/integrations':           { title: 'Integrations',        eyebrow: 'Connections' },
+  '/notifications':          { title: 'Notifications',       eyebrow: 'Alerts' },
+  '/queue':                  { title: 'Queue Inspector',     eyebrow: 'Ops' },
+  '/audit-log':              { title: 'Audit Log',           eyebrow: 'Ops' },
+  '/ai-playground':          { title: 'AI Playground',       eyebrow: 'Ops' },
   '/settings/workspace':     { title: 'Workspace',           eyebrow: 'Settings' },
   '/settings/ai':            { title: 'AI Configuration',    eyebrow: 'Settings' },
   '/settings/billing':       { title: 'Billing & Usage',     eyebrow: 'Settings' },
@@ -23,9 +30,10 @@ interface Props {
   userName?: string;
   aiPaused?: boolean;
   aiQuotaWarning?: boolean;
+  onSearchClick?: () => void;
 }
 
-export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning = false }: Props) {
+export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning = false, onSearchClick }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -86,6 +94,9 @@ export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Live activity ticker */}
+        <LiveTicker />
+
         {/* Local time */}
         <div
           style={{
@@ -146,6 +157,7 @@ export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning
         {/* Notifications */}
         <button
           aria-label="Notifications"
+          onClick={() => router.push('/notifications')}
           style={{
             position: 'relative',
             width: 36,
@@ -289,5 +301,100 @@ export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning
         </div>
       </div>
     </header>
+  );
+}
+
+const CONN_TONE: Record<ConnectionState, { color: string; label: string; pulse: boolean }> = {
+  connected:    { color: 'var(--green)', label: 'LIVE',    pulse: true },
+  connecting:   { color: 'var(--amber)', label: 'SYNC',    pulse: true },
+  reconnecting: { color: 'var(--amber)', label: 'SYNC',    pulse: true },
+  disconnected: { color: 'var(--text-4)', label: 'OFFLINE', pulse: false },
+};
+
+function LiveTicker() {
+  const router = useRouter();
+  const { feed, connectionState } = useLiveActivity();
+  const tone = CONN_TONE[connectionState];
+  const latest = feed[0];
+
+  return (
+    <button
+      onClick={() => { if (latest?.href) router.push(latest.href); }}
+      title={latest ? `${latest.title} — ${latest.detail}` : 'Realtime connection'}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        height: 30,
+        padding: '0 12px 0 10px',
+        borderRadius: 100,
+        background: 'rgba(255,255,255,0.025)',
+        border: '1px solid var(--border)',
+        cursor: latest?.href ? 'pointer' : 'default',
+        maxWidth: 320,
+        minWidth: 0,
+        overflow: 'hidden',
+        transition: 'border-color 0.2s, background 0.2s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+    >
+      {/* Connection dot */}
+      <span style={{ position: 'relative', width: 7, height: 7, flexShrink: 0 }}>
+        {tone.pulse && (
+          <span
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background: tone.color,
+              animation: connectionState === 'connected' ? 'pulseRing 2s ease-out infinite' : 'pulse 1.2s ease-in-out infinite',
+              opacity: 0.5,
+            }}
+          />
+        )}
+        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: tone.color, boxShadow: `0 0 6px ${tone.color}` }} />
+      </span>
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', color: tone.color, fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+        {tone.label}
+      </span>
+
+      {/* Latest activity, crossfading */}
+      <div style={{ position: 'relative', flex: 1, minWidth: 0, height: 16, overflow: 'hidden' }}>
+        <AnimatePresence mode="popLayout" initial={false}>
+          {latest ? (
+            <motion.span
+              key={latest.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: latest.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>{latest.title}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-4)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{latest.detail}</span>
+            </motion.span>
+          ) : (
+            <motion.span
+              key="idle"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', fontSize: 11.5, color: 'var(--text-4)', whiteSpace: 'nowrap' }}
+            >
+              Watching for activity…
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+    </button>
   );
 }

@@ -28,6 +28,13 @@ const NAV_OPS: NavItem[] = [
   { href: '/integrations', icon: 'plug',     label: 'Integrations', roles: ['OWNER','ADMIN'] },
 ];
 
+const NAV_TOOLS: NavItem[] = [
+  { href: '/notifications', icon: 'bell',    label: 'Notifications', roles: ['OWNER','ADMIN','AGENT','VIEWER'] },
+  { href: '/queue',         icon: 'cpu',     label: 'Queue',         roles: ['OWNER','ADMIN'] },
+  { href: '/audit-log',     icon: 'shield',  label: 'Audit Log',     roles: ['OWNER','ADMIN'] },
+  { href: '/ai-playground', icon: 'bot',     label: 'AI Playground', roles: ['OWNER','ADMIN'] },
+];
+
 const NAV_FOOTER: NavItem[] = [
   { href: '/settings/workspace', icon: 'settings', label: 'Settings', roles: ['OWNER','ADMIN','AGENT','VIEWER'] },
 ];
@@ -36,9 +43,10 @@ interface SidebarProps {
   role?: string;
   workspaceName?: string;
   plan?: string;
+  onSearchClick?: () => void;
 }
 
-export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace', plan = 'SOLO' }: SidebarProps) {
+export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace', plan = 'SOLO', onSearchClick }: SidebarProps) {
   const pathname = usePathname();
   const planVariant = plan === 'ENTERPRISE' ? 'accent' : plan === 'BROKERAGE' ? 'info' : 'neutral';
 
@@ -99,6 +107,7 @@ export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace'
       {/* Search trigger */}
       <div style={{ padding: '0 12px 12px' }}>
         <button
+          onClick={onSearchClick}
           style={{
             width: '100%',
             height: 32,
@@ -155,6 +164,14 @@ export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace'
         {NAV_OPS.some(item => item.roles.includes(role)) && (
           <NavGroup label="Operations">
             {NAV_OPS.filter(item => item.roles.includes(role)).map(item => (
+              <NavLink key={item.href} item={item} pathname={pathname} />
+            ))}
+          </NavGroup>
+        )}
+
+        {NAV_TOOLS.some(item => item.roles.includes(role)) && (
+          <NavGroup label="Tools">
+            {NAV_TOOLS.filter(item => item.roles.includes(role)).map(item => (
               <NavLink key={item.href} item={item} pathname={pathname} />
             ))}
           </NavGroup>

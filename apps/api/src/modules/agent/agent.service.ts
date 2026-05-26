@@ -20,7 +20,15 @@ export interface UpdateAgentInput {
   updatedByUserId: string,
   role?: 'ADMIN' | 'AGENT' | 'VIEWER',
   displayName?: string,
+  bio?: string,
   isAvailable?: boolean,
+  unavailableUntil?: Date | null,
+  specializations?: string[],
+  languages?: string[],
+  serviceAreas?: string[],
+  notifyOnNewLead?: boolean,
+  notifyOnHotLead?: boolean,
+  notifyOnEscalation?: boolean,
 }
 
 @Injectable()
@@ -34,9 +42,57 @@ export class AgentService {
     try {
       const agents = await this.prisma.workspaceUser.findMany({
         where: { workspaceId, isActive: true, deletedAt: null },
+        include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
         orderBy: { createdAt: 'asc' },
       });
-      return { ok: true, value: agents };
+      return { ok: true, value: agents as unknown as WorkspaceUser[] };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+
+  async getMyWorkspaceUserId(userId: string, workspaceId: string): Promise<Result<string>> {
+    try {
+      const wu = await this.prisma.workspaceUser.findFirst({
+        where: { userId, workspaceId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!wu) return { ok: false, error: new Error('Agent record not found') };
+      return { ok: true, value: wu.id };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+
+  async getNotificationPrefs(workspaceUserId: string, workspaceId: string): Promise<Result<Record<string, unknown>>> {
+    try {
+      const wu = await this.prisma.workspaceUser.findFirst({
+        where: { id: workspaceUserId, workspaceId, deletedAt: null },
+        select: { notifyOnNewLead: true, notifyOnHotLead: true, notifyOnEscalation: true, notifyChannel: true },
+      });
+      if (!wu) return { ok: false, error: new TenantLeakageError(workspaceUserId, workspaceId) };
+      return { ok: true, value: wu };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+
+  async updateNotificationPrefs(
+    workspaceUserId: string,
+    workspaceId: string,
+    prefs: { notifyOnNewLead?: boolean; notifyOnHotLead?: boolean; notifyOnEscalation?: boolean },
+  ): Promise<Result<Record<string, unknown>>> {
+    try {
+      const existing = await this.prisma.workspaceUser.findFirst({
+        where: { id: workspaceUserId, workspaceId, deletedAt: null },
+      });
+      if (!existing) return { ok: false, error: new TenantLeakageError(workspaceUserId, workspaceId) };
+      const updated = await this.prisma.workspaceUser.update({
+        where: { id: workspaceUserId },
+        data: prefs,
+        select: { notifyOnNewLead: true, notifyOnHotLead: true, notifyOnEscalation: true, notifyChannel: true },
+      });
+      return { ok: true, value: updated };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
     }
@@ -97,8 +153,16 @@ export class AgentService {
         where: { id: input.workspaceUserId },
         data: {
           ...(input.role && { role: input.role }),
-          ...(input.displayName && { displayName: input.displayName }),
+          ...(input.displayName !== undefined && { displayName: input.displayName }),
+          ...(input.bio !== undefined && { bio: input.bio }),
           ...(input.isAvailable !== undefined && { isAvailable: input.isAvailable }),
+          ...(input.unavailableUntil !== undefined && { unavailableUntil: input.unavailableUntil }),
+          ...(input.specializations && { specializations: input.specializations }),
+          ...(input.languages && { languages: input.languages }),
+          ...(input.serviceAreas && { serviceAreas: input.serviceAreas }),
+          ...(input.notifyOnNewLead !== undefined && { notifyOnNewLead: input.notifyOnNewLead }),
+          ...(input.notifyOnHotLead !== undefined && { notifyOnHotLead: input.notifyOnHotLead }),
+          ...(input.notifyOnEscalation !== undefined && { notifyOnEscalation: input.notifyOnEscalation }),
         },
       });
 

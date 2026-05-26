@@ -3,9 +3,11 @@ import { useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  DataTable, type ColumnDef, StatusBadge, EmptyState, Badge, Avatar, Skeleton, Button,
+  DataTable, type ColumnDef, StatusBadge, EmptyState, Badge, Avatar, Skeleton, Button, Modal, Input, useToast,
 } from '@conversionops/ui';
 import { useLeads, type Lead } from '@/hooks/useLeads';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
 import { Icon } from '@/components/Icon';
 
 function ScoreRing({ score, size = 28 }: { score: number; size?: number }) {
@@ -153,6 +155,75 @@ const COLUMNS: ColumnDef<Lead>[] = [
   },
 ];
 
+function CreateLeadModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { addToast } = useToast();
+  const qc = useQueryClient();
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+
+  const create = useMutation({
+    mutationFn: () => apiClient.post<{ id: string }>('/leads', {
+      source: 'MANUAL',
+      name: name.trim() || undefined,
+      phone: phone.trim() || undefined,
+      email: email.trim() || undefined,
+    }),
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['leads'] });
+      addToast('Lead created', 'success');
+      onClose();
+      setName(''); setPhone(''); setEmail('');
+      router.push(`/leads/${data.id}`);
+    },
+    onError: () => { addToast('Failed to create lead', 'error'); },
+  });
+
+  const valid = name.trim() || phone.trim() || email.trim();
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add lead manually">
+      <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 20, lineHeight: 1.55 }}>
+        The AI will reach out within 60 seconds of creation.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 22 }}>
+        <Input
+          label="Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="Sarah Johnson"
+          autoFocus
+        />
+        <Input
+          label="Phone"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="+1 (555) 000-0000"
+          type="tel"
+        />
+        <Input
+          label="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="sarah@example.com"
+          type="email"
+        />
+        <p style={{ fontSize: 11, color: 'var(--text-4)', margin: 0 }}>
+          At least one contact field is required.
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+        <Button size="sm" loading={create.isPending} onClick={() => create.mutate()} disabled={!valid}>
+          <Icon name="plus" size={12} stroke={2.2} />
+          Create lead
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 function LeadsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -160,6 +231,7 @@ function LeadsContent() {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { leads, isLoading, fetchNextPage, hasNextPage } = useLeads();
 
@@ -197,8 +269,19 @@ function LeadsContent() {
           </h1>
         </div>
 
-        {/* View toggle */}
-        <div style={{ display: 'flex', gap: 4, padding: 3, background: 'var(--bg-3)', borderRadius: 10, border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* New lead button */}
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="btn-primary"
+            style={{ fontSize: 12, height: 36, padding: '0 14px' }}
+          >
+            <Icon name="plus" size={13} stroke={2.2} />
+            New lead
+          </button>
+
+          {/* View toggle */}
+          <div style={{ display: 'flex', gap: 4, padding: 3, background: 'var(--bg-3)', borderRadius: 10, border: '1px solid var(--border)' }}>
           {[
             { id: 'list', icon: 'menu' as const, label: 'List' },
             { id: 'kanban', icon: 'grip' as const, label: 'Board' },
@@ -226,8 +309,11 @@ function LeadsContent() {
               {v.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
+
+      <CreateLeadModal open={createOpen} onClose={() => setCreateOpen(false)} />
 
       {/* Filters */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>

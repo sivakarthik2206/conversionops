@@ -135,6 +135,20 @@ export class LeadController {
     return result.value;
   }
 
+  @Get(':id/events')
+  @RequirePermission('lead:read')
+  async getLeadEvents(
+    @Param('id') id: string,
+    @CurrentWorkspace() workspace: AuthenticatedWorkspace,
+  ) {
+    const result = await this.leadService.getLeadEvents(id, workspace.id);
+    if (!result.ok) {
+      if (result.error instanceof TenantLeakageError) throw new NotFoundException('Lead not found');
+      throw new NotFoundException('Lead not found');
+    }
+    return result.value;
+  }
+
   @Post(':id/reactivate')
   @RequirePermission('lead:write')
   async reactivateLead(

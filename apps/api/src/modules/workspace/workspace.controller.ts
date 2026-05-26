@@ -7,11 +7,13 @@ import {
   NotFoundException,
   Patch,
   Post,
+  Query,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { WorkspaceService } from './workspace.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { UpdateWorkspaceCommand } from './commands/update-workspace.command';
 import { PauseAICommand } from './commands/pause-ai.handler';
 import { ResumeAICommand } from './commands/resume-ai.handler';
@@ -42,7 +44,10 @@ type PauseAIDto = z.infer<typeof PauseAISchema>;
 @Controller('workspaces')
 @UseGuards(AuthGuard, RbacGuard)
 export class WorkspaceController {
-  constructor(private readonly workspaceService: WorkspaceService) {}
+  constructor(
+    private readonly workspaceService: WorkspaceService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('me')
   @RequirePermission('settings:read')
@@ -114,5 +119,35 @@ export class WorkspaceController {
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
   ): Promise<void> {
     await this.workspaceService.resumeAI(new ResumeAICommand(workspace.id, user.id));
+  }
+
+  @Get('me/audit-log')
+  @RequirePermission('settings:read')
+  async getAuditLog(
+    @CurrentWorkspace() workspace: AuthenticatedWorkspace,
+    @Query('action') action?: string,
+    @Query('resource') resource?: string,
+    @Query('limit') limitStr?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    const limit = Math.min(parseInt(limitStr ?? '50', 10), 200);
+    const entries = await this.prisma.auditLog.findMany({
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      where: {
+        workspaceId: workspace.id,
+        deletedAt: null,
+        ...(action ? { action } : {}),
+        ...(resource ? { resource } : {}),
+      },
+      include: {
+        user: { select: { id: true, email: true } },
+      },
+      orderBy: { occurredAt: 'desc' },
+    });
+
+    const hasMore = entries.length > limit;
+    const items = hasMore ? entries.slice(0, -1) : entries;
+    return { items, nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null };
   }
 }

@@ -1,11 +1,13 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Skeleton, StatusBadge, EmptyState } from '@conversionops/ui';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Icon } from '@/components/Icon';
+import { useRealtime } from '@/hooks/useRealtime';
+import type { MessageNewEvent } from '@/hooks/useRealtime';
 
 interface Message {
   id: string;
@@ -42,19 +44,68 @@ export default function ConversationDetailPage() {
   const qc = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messageText, setMessageText] = useState('');
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
   const { data, isLoading, isError } = useQuery<ConversationDetail>({
     queryKey: ['conversation', params.id],
     queryFn: () => apiClient.get(`/conversations/${params.id}`),
-    refetchInterval: 5000,
   });
+
+  // Seed local messages from query data on first load
+  useEffect(() => {
+    if (data?.messages) {
+      setLocalMessages(data.messages);
+    }
+  }, [data?.messages]);
+
+  // Subscribe to realtime message:new events — no more polling
+  const { on, joinConversation } = useRealtime();
+
+  useEffect(() => {
+    if (params.id) joinConversation(params.id);
+  }, [params.id, joinConversation]);
+
+  useEffect(() => {
+    const off = on('message:new', (event: MessageNewEvent) => {
+      if (event.conversationId !== params.id) return;
+      setLocalMessages(prev => {
+        if (prev.some(m => m.id === event.messageId)) return prev;
+        return [
+          ...prev,
+          {
+            id: event.messageId,
+            role: event.role,
+            content: event.content,
+            createdAt: event.createdAt,
+          },
+        ];
+      });
+      // Invalidate the query so conversation header data stays fresh (status, aiActive)
+      void qc.invalidateQueries({ queryKey: ['conversation', params.id] });
+    });
+    return off;
+  }, [on, params.id, qc]);
 
   const sendMessage = useMutation({
     mutationFn: (content: string) =>
       apiClient.post(`/conversations/${params.id}/message`, { content }),
-    onSuccess: () => {
+    onMutate: async (content: string) => {
       setMessageText('');
+      // Optimistic update — add the message locally immediately
+      const optimistic: Message = {
+        id: `optimistic-${Date.now()}`,
+        role: 'HUMAN',
+        content,
+        createdAt: new Date().toISOString(),
+      };
+      setLocalMessages(prev => [...prev, optimistic]);
+    },
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['conversation', params.id] });
+    },
+    onError: () => {
+      // Remove optimistic message on failure
+      setLocalMessages(prev => prev.filter(m => !m.id.startsWith('optimistic-')));
     },
   });
 
@@ -70,7 +121,12 @@ export default function ConversationDetailPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [data?.messages]);
+  }, [localMessages]);
+
+  const handleSend = useCallback(() => {
+    const text = messageText.trim();
+    if (text) sendMessage.mutate(text);
+  }, [messageText, sendMessage]);
 
   if (isLoading) {
     return (
@@ -172,6 +228,12 @@ export default function ConversationDetailPage() {
           </div>
         </div>
 
+        {/* Realtime indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--green)', fontFamily: "'JetBrains Mono', monospace" }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', boxShadow: '0 0 6px var(--green)' }} />
+          Live
+        </div>
+
         {isAIActive ? (
           <button
             onClick={() => takeover.mutate()}
@@ -207,7 +269,7 @@ export default function ConversationDetailPage() {
         }}
       >
         <AnimatePresence initial={false}>
-          {data.messages.map(msg => {
+          {localMessages.map(msg => {
             if (msg.role === 'SYSTEM') {
               return (
                 <motion.div
@@ -235,11 +297,12 @@ export default function ConversationDetailPage() {
             }
 
             const isHuman = msg.role === 'HUMAN';
+            const isOptimistic = msg.id.startsWith('optimistic-');
             return (
               <motion.div
                 key={msg.id}
                 initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
+                animate={{ opacity: isOptimistic ? 0.7 : 1, y: 0 }}
                 transition={{ duration: 0.25 }}
                 style={{
                   display: 'flex',
@@ -290,7 +353,7 @@ export default function ConversationDetailPage() {
                     padding: '0 4px',
                   }}
                 >
-                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {isOptimistic ? 'Sending…' : new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </motion.div>
             );
@@ -317,10 +380,10 @@ export default function ConversationDetailPage() {
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey && messageText.trim()) {
                 e.preventDefault();
-                sendMessage.mutate(messageText.trim());
+                handleSend();
               }
             }}
-            placeholder="Type your message&hellip; (Enter to send · Shift+Enter for newline)"
+            placeholder="Type your message… (Enter to send · Shift+Enter for newline)"
             rows={2}
             style={{
               flex: 1,
@@ -336,7 +399,7 @@ export default function ConversationDetailPage() {
             }}
           />
           <button
-            onClick={() => messageText.trim() && sendMessage.mutate(messageText.trim())}
+            onClick={handleSend}
             disabled={!messageText.trim() || sendMessage.isPending}
             className="btn-primary"
             style={{ width: 40, padding: 0, height: 40, borderRadius: '50%' }}
