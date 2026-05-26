@@ -3,39 +3,58 @@
 import { Reveal } from '@/components/Reveal';
 import { Icon } from '@/components/Icon';
 
-interface Quote {
-  body: string;
-  name: string;
-  role: string;
-  market: string;
-  highlight: string;
-}
+type IconName = Parameters<typeof Icon>[0]['name'];
 
-const QUOTES: Quote[] = [
+const ISA_ROWS: { label: string; icon: IconName; isa: string; ops: string; isaWin: boolean }[] = [
   {
-    body: "We were paying two ISAs $110k between them. Replaced both with ConversionOps and our contact rate doubled in the first month. The system never sleeps, never quits, never has a bad day.",
-    name: 'Marcus Reyes',
-    role: 'Broker · 28 agents',
-    market: 'Miami, FL',
-    highlight: '2× contact rate',
+    label: 'First response',
+    icon: 'clock',
+    isa: '3 – 8 hours avg',
+    ops: '< 60 seconds, every time',
+    isaWin: false,
   },
   {
-    body: "The 60-second response is the difference. Buyers tell us we're the only ones who replied — and that's already half the conversation won. Booked 14 appointments in the first week.",
-    name: 'Jenna Park',
-    role: 'Team Lead · KW',
-    market: 'Orlando, FL',
-    highlight: '14 appts / wk',
+    label: 'Coverage',
+    icon: 'bolt',
+    isa: 'Business hours only',
+    ops: '24 / 7 / 365 — including holidays',
+    isaWin: false,
   },
   {
-    body: "What sold me was the TCPA layer. Most AI tools hand-wave compliance. ConversionOps actually has a consent ledger, quiet-hour gating, and a real audit trail. Our legal team signed off in 20 minutes.",
-    name: 'David Lin',
-    role: 'CTO · Regional brokerage',
-    market: 'Tampa, FL',
-    highlight: 'Audit-ready',
+    label: 'Annual cost',
+    icon: 'chart',
+    isa: '$45k – $65k salary + benefits',
+    ops: 'From $9k/yr all-in',
+    isaWin: false,
+  },
+  {
+    label: 'Simultaneous leads',
+    icon: 'message',
+    isa: '1 at a time',
+    ops: 'Unlimited parallel conversations',
+    isaWin: false,
+  },
+  {
+    label: 'TCPA compliance',
+    icon: 'shield',
+    isa: 'Manual — error-prone',
+    ops: 'Automated ledger + quiet-hour gating',
+    isaWin: false,
+  },
+  {
+    label: 'Consistency',
+    icon: 'target',
+    isa: 'Varies by mood, tenure, season',
+    ops: 'Identical quality on every message',
+    isaWin: false,
   },
 ];
 
-const MARKETS = ['Miami', 'Orlando', 'Tampa', 'San Diego', 'Austin', 'Phoenix', 'Charlotte', 'Atlanta'];
+const PROOF_STATS = [
+  { v: '00:47', l: 'avg first response', sub: 'measured across all inbound channels' },
+  { v: '24 / 7', l: 'always on', sub: 'no holidays, no sick days, no handoffs' },
+  { v: '< 1 day', l: 'to go live', sub: 'from signed agreement to first AI response' },
+];
 
 export default function Testimonials() {
   return (
@@ -58,7 +77,7 @@ export default function Testimonials() {
           width: 600,
           height: 600,
           borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(179,155,255,0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(179,155,255,0.06) 0%, transparent 70%)',
           filter: 'blur(80px)',
           pointerEvents: 'none',
         }}
@@ -67,232 +86,266 @@ export default function Testimonials() {
       <div className="container-page" style={{ position: 'relative' }}>
         {/* Header */}
         <Reveal>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 18, marginBottom: 56 }}>
-            <span className="eyebrow" style={{ color: 'var(--purple)' }}>The receipts</span>
-            <h2 className="serif t-h1" style={{ color: 'var(--text)', margin: 0, fontWeight: 400, maxWidth: 720 }}>
-              Operators who replaced their ISAs &mdash;{' '}
-              <span style={{ fontStyle: 'italic', color: 'var(--purple)', fontFamily: "'Instrument Serif', serif" }}>
-                and never went back.
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: 18,
+              marginBottom: 64,
+            }}
+          >
+            <span className="eyebrow" style={{ color: 'var(--accent)' }}>The math, unfiltered</span>
+            <h2
+              className="serif t-h1"
+              style={{ color: 'var(--text)', margin: 0, fontWeight: 400, maxWidth: 720 }}
+            >
+              Why agents replace their ISAs —{' '}
+              <span
+                style={{
+                  fontStyle: 'italic',
+                  color: 'var(--accent)',
+                  fontFamily: "'Instrument Serif', serif",
+                }}
+              >
+                and don&apos;t look back.
               </span>
             </h2>
+            <p
+              style={{
+                fontSize: 16,
+                color: 'var(--text-3)',
+                maxWidth: 520,
+                lineHeight: 1.6,
+                margin: 0,
+              }}
+            >
+              Not a testimonial. A direct comparison of what you&apos;re paying for versus what you&apos;re getting.
+            </p>
           </div>
         </Reveal>
 
-        {/* Quote grid */}
-        <div
-          className="testimonial-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 16,
-            marginBottom: 72,
-          }}
-        >
-          {QUOTES.map((q, i) => (
-            <Reveal key={q.name} delay={((i + 1) as 1 | 2 | 3)}>
-              <QuoteCard q={q} featured={i === 1} />
-            </Reveal>
-          ))}
-        </div>
-
-        {/* Markets marquee */}
-        <Reveal delay={2}>
+        {/* Comparison table */}
+        <Reveal delay={1}>
           <div
+            className="comparison-wrap"
             style={{
-              position: 'relative',
-              padding: '24px 0',
-              borderTop: '1px solid var(--border)',
-              borderBottom: '1px solid var(--border)',
+              background: 'linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%)',
+              border: '1px solid var(--border)',
+              borderRadius: 20,
               overflow: 'hidden',
+              marginBottom: 48,
+              boxShadow: 'var(--shadow-md)',
             }}
           >
+            {/* Column headers */}
             <div
+              className="comp-row comp-header"
               style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 120,
-                background: 'linear-gradient(90deg, var(--bg-2), transparent)',
-                zIndex: 2,
-                pointerEvents: 'none',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: 120,
-                background: 'linear-gradient(-90deg, var(--bg-2), transparent)',
-                zIndex: 2,
-                pointerEvents: 'none',
-              }}
-            />
-            <div
-              style={{
-                display: 'flex',
-                gap: 48,
-                width: 'fit-content',
-                animation: 'marquee 36s linear infinite',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                borderBottom: '1px solid var(--border)',
               }}
             >
-              {[...MARKETS, ...MARKETS].map((market, i) => (
-                <div
-                  key={`${market}-${i}`}
+              <div
+                style={{
+                  padding: '16px 24px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--text-4)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                Factor
+              </div>
+              <div
+                style={{
+                  padding: '16px 24px',
+                  borderLeft: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span
                   style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: 'var(--text-4)',
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  Human ISA
+                </span>
+              </div>
+              <div
+                style={{
+                  padding: '16px 24px',
+                  borderLeft: '1px solid var(--border)',
+                  background: 'rgba(232,255,71,0.04)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 4,
+                    background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#0a0a0b',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon name="logo-mark" size={9} stroke={2} />
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: 'var(--accent)',
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  ConversionOps
+                </span>
+              </div>
+            </div>
+
+            {/* Rows */}
+            {ISA_ROWS.map((row, i) => (
+              <div
+                key={row.label}
+                className="comp-row"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  borderBottom: i < ISA_ROWS.length - 1 ? '1px solid var(--border)' : 'none',
+                }}
+              >
+                {/* Label */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <Icon name={row.icon} size={13} stroke={1.7} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{row.label}</span>
+                </div>
+
+                {/* ISA */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    borderLeft: '1px solid var(--border)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    flexShrink: 0,
-                    fontSize: 14,
-                    color: 'var(--text-3)',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    letterSpacing: '0.04em',
                   }}
                 >
-                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
-                  {market.toUpperCase()}
+                  <Icon name="minus" size={12} stroke={2.4} style={{ color: 'var(--red)', opacity: 0.7, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.4 }}>{row.isa}</span>
                 </div>
-              ))}
-            </div>
+
+                {/* ConversionOps */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    borderLeft: '1px solid var(--border)',
+                    background: 'rgba(232,255,71,0.025)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <Icon name="check" size={12} stroke={2.8} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, lineHeight: 1.4 }}>{row.ops}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+
+        {/* Proof stat strip */}
+        <Reveal delay={2}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 16,
+            }}
+            className="proof-grid"
+          >
+            {PROOF_STATS.map((s) => (
+              <div
+                key={s.l}
+                style={{
+                  padding: '24px 28px',
+                  borderRadius: 16,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <div
+                  className="serif"
+                  style={{
+                    fontSize: 36,
+                    lineHeight: 1,
+                    color: 'var(--accent)',
+                    fontWeight: 400,
+                    fontFamily: "'Instrument Serif', 'DM Serif Display', serif",
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {s.v}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.l}</div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-4)',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    letterSpacing: '0.02em',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {s.sub}
+                </div>
+              </div>
+            ))}
           </div>
         </Reveal>
       </div>
 
       <style>{`
-        @media (max-width: 960px) { .testimonial-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 960px) {
+          .comp-row { grid-template-columns: 1fr !important; }
+          .comp-header { display: none !important; }
+          .comp-row > div { border-left: none !important; border-top: 1px solid var(--border); }
+          .comp-row > div:first-child { border-top: none; background: var(--bg-3); }
+          .proof-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .proof-grid { grid-template-columns: 1fr 1fr !important; }
+        }
       `}</style>
     </section>
-  );
-}
-
-function QuoteCard({ q, featured }: { q: Quote; featured?: boolean }) {
-  return (
-    <figure
-      style={{
-        background: featured
-          ? 'linear-gradient(180deg, rgba(179,155,255,0.06) 0%, var(--bg) 80%)'
-          : 'linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%)',
-        border: '1px solid',
-        borderColor: featured ? 'rgba(179,155,255,0.25)' : 'var(--border)',
-        borderRadius: 18,
-        padding: 28,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 20,
-        position: 'relative',
-        boxShadow: featured ? '0 16px 48px rgba(179,155,255,0.10)' : 'var(--shadow-sm)',
-        height: '100%',
-        margin: 0,
-        transition: 'transform 0.4s var(--ease-out-quart), border-color 0.4s',
-      }}
-      onMouseEnter={e => {
-        const el = e.currentTarget;
-        el.style.transform = 'translateY(-4px)';
-        el.style.borderColor = featured ? 'rgba(179,155,255,0.45)' : 'var(--border-light)';
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget;
-        el.style.transform = 'translateY(0)';
-        el.style.borderColor = featured ? 'rgba(179,155,255,0.25)' : 'var(--border)';
-      }}
-    >
-      {/* Big quote mark */}
-      <span
-        className="serif"
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 22,
-          fontSize: 80,
-          lineHeight: 0.7,
-          color: featured ? 'rgba(179,155,255,0.18)' : 'rgba(255,255,255,0.06)',
-          userSelect: 'none',
-          fontStyle: 'italic',
-        }}
-      >
-        &ldquo;
-      </span>
-
-      {/* Highlight chip */}
-      <span
-        style={{
-          alignSelf: 'flex-start',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '4px 10px',
-          borderRadius: 100,
-          background: featured ? 'rgba(179,155,255,0.12)' : 'rgba(232,255,71,0.10)',
-          border: '1px solid',
-          borderColor: featured ? 'rgba(179,155,255,0.30)' : 'rgba(232,255,71,0.25)',
-          fontSize: 11,
-          fontWeight: 600,
-          color: featured ? 'var(--purple)' : 'var(--accent)',
-          fontFamily: "'JetBrains Mono', monospace",
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        <Icon name="sparkle" size={10} stroke={2.4} />
-        {q.highlight}
-      </span>
-
-      {/* Quote body */}
-      <blockquote
-        style={{
-          margin: 0,
-          fontFamily: "'Instrument Serif', 'DM Serif Display', serif",
-          fontSize: featured ? 22 : 19,
-          lineHeight: 1.4,
-          color: 'var(--text)',
-          letterSpacing: '-0.015em',
-          fontStyle: 'italic',
-        }}
-      >
-        {q.body}
-      </blockquote>
-
-      {/* Author */}
-      <figcaption
-        style={{
-          marginTop: 'auto',
-          paddingTop: 16,
-          borderTop: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            background: featured
-              ? 'linear-gradient(135deg, var(--purple), #7c5fff)'
-              : 'linear-gradient(135deg, var(--bg-4), var(--bg-3))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: featured ? '#fff' : 'var(--text-2)',
-            fontWeight: 700,
-            fontSize: 13,
-            border: '1px solid var(--border-light)',
-            flexShrink: 0,
-          }}
-        >
-          {q.name.split(' ').map(n => n[0]).join('')}
-        </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{q.name}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-            {q.role} &middot; {q.market}
-          </div>
-        </div>
-      </figcaption>
-    </figure>
   );
 }
