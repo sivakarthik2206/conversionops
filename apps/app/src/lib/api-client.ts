@@ -61,10 +61,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-const baseURL =
-  typeof window !== 'undefined'
-    ? (process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/v1')
-    : (process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/v1');
+const _apiUrl = process.env['NEXT_PUBLIC_API_URL'];
+if (!_apiUrl && process.env.NODE_ENV === 'production') {
+  throw new Error('[ConversionOps] NEXT_PUBLIC_API_URL must be set in production');
+}
+const baseURL = _apiUrl ?? 'http://localhost:3001/v1';
 
 export const apiClient = {
   /**

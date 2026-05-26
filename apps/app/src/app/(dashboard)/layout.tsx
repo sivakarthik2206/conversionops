@@ -10,6 +10,7 @@ import { RealtimeProvider } from '@/components/realtime/RealtimeProvider';
 import { apiClient } from '@/lib/api-client';
 
 interface WorkspaceContext {
+  id: string;
   name: string;
   plan: string;
   aiPaused: boolean;
@@ -55,7 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   return (
-    <RealtimeProvider>
+    <RealtimeProvider workspaceId={workspace?.id}>
       <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', position: 'relative', zIndex: 1 }}>
         <Sidebar
           onSearchClick={openCmd}

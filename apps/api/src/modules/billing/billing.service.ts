@@ -19,9 +19,19 @@ export type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['co
 export class BillingService {
   private readonly stripe: InstanceType<typeof Stripe>;
 
+  private readonly stripeConfigured: boolean;
+
   constructor(private readonly prisma: PrismaService) {
-    const key = process.env['STRIPE_SECRET_KEY'] ?? 'sk_placeholder_not_configured';
-    this.stripe = new Stripe(key, { apiVersion: '2026-04-22.dahlia' });
+    const key = process.env['STRIPE_SECRET_KEY'] ?? '';
+    this.stripeConfigured = key.startsWith('sk_');
+    this.stripe = new Stripe(key || 'sk_test_placeholder', { apiVersion: '2026-04-22.dahlia' });
+  }
+
+  private requireStripe(): Result<void> {
+    if (!this.stripeConfigured) {
+      return { ok: false, error: new Error('Stripe is not configured — set STRIPE_SECRET_KEY to enable billing') };
+    }
+    return { ok: true, value: undefined };
   }
 
   /**
@@ -30,6 +40,8 @@ export class BillingService {
    * @returns Result<checkoutUrl>
    */
   async createCheckoutSession(workspaceId: string, priceId: string): Promise<Result<string>> {
+    const stripeCheck = this.requireStripe();
+    if (!stripeCheck.ok) return stripeCheck;
     try {
       const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
       if (!workspace) return { ok: false, error: new Error('Workspace not found') };
@@ -49,7 +61,7 @@ export class BillingService {
         });
       }
 
-      const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
+      const appUrl = process.env['APP_URL'] ?? process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
       const session = await this.stripe.checkout.sessions.create({
         customer: customerId,
         payment_method_types: ['card'],
@@ -73,13 +85,15 @@ export class BillingService {
    * @returns Result<portalUrl>
    */
   async createPortalSession(workspaceId: string): Promise<Result<string>> {
+    const stripeCheck = this.requireStripe();
+    if (!stripeCheck.ok) return stripeCheck;
     try {
       const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
       if (!workspace?.stripeCustomerId) {
         return { ok: false, error: new Error('No Stripe customer found for workspace') };
       }
 
-      const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
+      const appUrl = process.env['APP_URL'] ?? process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
       const session = await this.stripe.billingPortal.sessions.create({
         customer: workspace.stripeCustomerId,
         return_url: `${appUrl}/settings/billing`,

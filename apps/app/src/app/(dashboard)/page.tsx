@@ -72,8 +72,6 @@ export default function OverviewPage() {
       value: health?.totalLeads ?? 0,
       icon: 'users',
       color: 'var(--accent)',
-      trend: '+12%',
-      trendPositive: true,
     },
     {
       label: 'Qualified rate',
@@ -82,16 +80,12 @@ export default function OverviewPage() {
       suffix: '%',
       icon: 'target',
       color: 'var(--green)',
-      trend: '+8%',
-      trendPositive: true,
     },
     {
       label: 'Appointments',
       value: health?.appointmentsBooked ?? 0,
       icon: 'calendar',
       color: 'var(--purple)',
-      trend: '+5',
-      trendPositive: true,
     },
     {
       label: 'Avg response',
@@ -101,8 +95,6 @@ export default function OverviewPage() {
       display: '—',
       icon: 'clock',
       color: 'var(--blue)',
-      trend: '−3s',
-      trendPositive: true,
     },
   ];
 

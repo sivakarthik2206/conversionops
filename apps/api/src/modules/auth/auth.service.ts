@@ -29,7 +29,7 @@ export class AuthService {
     if (!secret) return { ok: false, error: new Error('MAGIC_LINK_SECRET not configured') };
 
     const token = generateMagicLinkToken(email, secret);
-    const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
+    const appUrl = process.env['APP_URL'] ?? process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
 
     const emailResult = await this.resend.sendMagicLink(email, token, appUrl);
     if (!emailResult.ok) {

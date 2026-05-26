@@ -17,7 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UpdateWorkspaceCommand } from './commands/update-workspace.command';
 import { PauseAICommand } from './commands/pause-ai.handler';
 import { ResumeAICommand } from './commands/resume-ai.handler';
-import { WorkspaceDto } from './queries/get-workspace.query';
+import { WorkspaceDto, WorkspaceHealthDto } from './queries/get-workspace.query';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RbacGuard, RequirePermission } from '../../common/guards/rbac.guard';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/user.decorator';
@@ -80,10 +80,32 @@ export class WorkspaceController {
   @RequirePermission('settings:read')
   async getHealth(
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
-  ): Promise<WorkspaceDto> {
-    const result = await this.workspaceService.getWorkspace(workspace.id);
-    if (!result.ok) throw new NotFoundException('Workspace not found');
-    return result.value;
+  ): Promise<WorkspaceHealthDto> {
+    const [totalLeads, qualifiedLeads, appointmentsBooked, messages] = await Promise.all([
+      this.prisma.lead.count({ where: { workspaceId: workspace.id, deletedAt: null } }),
+      this.prisma.lead.count({ where: { workspaceId: workspace.id, deletedAt: null, tier: { in: ['HOT', 'PRIORITY', 'WARM'] } } }),
+      this.prisma.appointment.count({ where: { workspaceId: workspace.id, deletedAt: null } }),
+      this.prisma.message.findMany({
+        where: { workspaceId: workspace.id, role: 'AI' },
+        select: { createdAt: true, conversation: { select: { createdAt: true } } },
+        take: 200,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const qualifiedRate = totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100 * 10) / 10 : 0;
+
+    let avgResponseMs = 0;
+    if (messages.length > 0) {
+      const responseTimes = messages
+        .map(m => new Date(m.createdAt).getTime() - new Date(m.conversation.createdAt).getTime())
+        .filter(t => t > 0 && t < 300_000);
+      if (responseTimes.length > 0) {
+        avgResponseMs = Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length);
+      }
+    }
+
+    return { totalLeads, qualifiedRate, appointmentsBooked, avgResponseMs };
   }
 
   @Patch('me/ai-config')

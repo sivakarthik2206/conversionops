@@ -15,6 +15,14 @@ export interface WorkspaceDto {
   tokenUsagePercent: number;
   agentCount: number;
   onboardingStep: number;
+  ownerEmail: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface WorkspaceHealthDto {
+  totalLeads: number;
+  qualifiedRate: number;
+  appointmentsBooked: number;
+  avgResponseMs: number;
 }

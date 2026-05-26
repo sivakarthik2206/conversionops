@@ -45,6 +45,7 @@ export class GetWorkspaceHandler {
           tokenUsagePercent,
           agentCount: workspace._count.users,
           onboardingStep: workspace.onboardingStep,
+          ownerEmail: workspace.ownerEmail,
           createdAt: workspace.createdAt,
           updatedAt: workspace.updatedAt,
         },

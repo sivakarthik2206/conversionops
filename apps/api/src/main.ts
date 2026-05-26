@@ -43,7 +43,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 // Required env vars for production startup — fail fast if missing
-const REQUIRED_ENV_VARS_PROD = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'MAGIC_LINK_SECRET'];
+const REQUIRED_ENV_VARS_PROD = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'MAGIC_LINK_SECRET', 'APP_URL', 'RESEND_API_KEY'];
 
 async function bootstrap(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {

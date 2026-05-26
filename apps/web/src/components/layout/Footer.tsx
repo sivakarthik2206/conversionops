@@ -6,28 +6,27 @@ const COLUMNS = [
   {
     title: 'Product',
     items: [
-      { label: 'Features',  href: '/#features' },
-      { label: 'Live demo', href: '/#demo' },
-      { label: 'Pricing',   href: '/pricing' },
+      { label: 'Features',    href: '/#features' },
+      { label: 'Live demo',   href: '/#demo' },
+      { label: 'Pricing',     href: '/pricing' },
       { label: 'Book a demo', href: '/book' },
     ],
   },
   {
     title: 'Company',
     items: [
-      { label: 'About',     href: '#' },
-      { label: 'Changelog', href: '#' },
-      { label: 'Status',    href: '#' },
-      { label: 'Careers',   href: '#' },
+      { label: 'Book a demo',  href: '/book' },
+      { label: 'Contact us',   href: 'mailto:hello@conversionops.in' },
+      { label: 'Sign in',      href: 'https://app.conversionops.in/login' },
     ],
   },
   {
     title: 'Legal',
     items: [
-      { label: 'Privacy Policy',    href: '/legal/privacy' },
-      { label: 'Terms of Service',  href: '/legal/terms' },
-      { label: 'TCPA Compliance',   href: '/legal/privacy#tcpa' },
-      { label: 'Fair Housing',      href: '/legal/privacy#fair-housing' },
+      { label: 'Privacy Policy',   href: '/legal/privacy' },
+      { label: 'Terms of Service', href: '/legal/terms' },
+      { label: 'TCPA Compliance',  href: '/legal/privacy#tcpa' },
+      { label: 'Fair Housing',     href: '/legal/privacy#fair-housing' },
     ],
   },
 ];

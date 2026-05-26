@@ -298,8 +298,15 @@ export function RealtimeProvider({ children, workspaceId }: { children: React.Re
       return;
     }
 
-    const wsUrl = process.env['NEXT_PUBLIC_WS_URL'] ?? 'http://localhost:3001';
-    const socket = io(wsUrl, {
+    const wsUrl = process.env['NEXT_PUBLIC_WS_URL'];
+    if (!wsUrl) {
+      if (process.env.NODE_ENV === 'production') {
+        setConnectionState('disconnected');
+        return;
+      }
+    }
+    const resolvedWsUrl = wsUrl ?? 'http://localhost:3001';
+    const socket = io(resolvedWsUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: Infinity,
