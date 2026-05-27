@@ -16,7 +16,7 @@ const COLUMNS = [
     title: 'Company',
     items: [
       { label: 'Book a demo',  href: '/book' },
-      { label: 'Contact us',   href: 'mailto:hello@conversionops.in' },
+      { label: 'Contact us',   href: '/book' },
       { label: 'Sign in',      href: 'https://app.conversionops.in/login' },
     ],
   },

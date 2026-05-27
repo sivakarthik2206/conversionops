@@ -4,6 +4,8 @@ import { Reveal } from '@/components/Reveal';
 import { Icon } from '@/components/Icon';
 import { CalEmbed } from '@/components/CalEmbed';
 
+const CAL_LINK = process.env['NEXT_PUBLIC_CALCOM_LINK'] ?? '';
+
 export const metadata = {
   title: 'Book a Demo — ConversionOps',
   description: 'Schedule a personalized demo of ConversionOps AI lead conversion.',
@@ -209,83 +211,49 @@ export default function BookPage() {
                     Times available in your timezone. Most teams ship the same day.
                   </p>
 
-                  {/* Live Cal.com embed when configured; static slot mockup + email fallback otherwise */}
+                  {/* Live Cal.com embed when configured; direct-link fallback otherwise */}
                   <CalEmbed
                     fallback={
-                      <>
-                        <div
-                          style={{
-                            background: 'var(--bg-3)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 14,
-                            padding: 16,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                            marginBottom: 20,
-                          }}
-                        >
-                          {[
-                            { day: 'Today',    times: ['2:30 PM', '4:00 PM'] },
-                            { day: 'Tomorrow', times: ['10:00 AM', '1:30 PM', '5:00 PM'] },
-                          ].map(slot => (
-                            <div key={slot.day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <div
-                                style={{
-                                  width: 80,
-                                  fontSize: 12,
-                                  color: 'var(--text-2)',
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {slot.day}
-                              </div>
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
-                                {slot.times.map(t => (
-                                  <span
-                                    key={t}
-                                    style={{
-                                      padding: '6px 10px',
-                                      borderRadius: 8,
-                                      background: 'var(--bg-4)',
-                                      border: '1px solid var(--border-light)',
-                                      color: 'var(--text-2)',
-                                      fontSize: 12,
-                                      fontFamily: "'JetBrains Mono', monospace",
-                                      fontWeight: 500,
-                                    }}
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
+                      <div
+                        style={{
+                          background: 'var(--bg-3)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 14,
+                          padding: 32,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 16,
+                          textAlign: 'center',
+                        }}
+                      >
+                        <Icon name="calendar" size={28} stroke={1.6} style={{ color: 'var(--accent)', opacity: 0.8 }} />
+                        <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0, lineHeight: 1.6, maxWidth: 320 }}>
+                          Pick a time that works for you — no forms, no friction. You&apos;ll get a calendar invite instantly.
+                        </p>
                         <a
-                          href="mailto:hello@conversionops.in?subject=Demo%20request&body=Hi%20-%20I%27d%20like%20to%20book%20a%20demo.%20Best%20times%3A%20"
+                          href={CAL_LINK ? `https://cal.com/${CAL_LINK}` : 'https://cal.com'}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="btn-primary"
-                          style={{ width: '100%', justifyContent: 'center' }}
+                          style={{ textDecoration: 'none' }}
                         >
-                          <Icon name="mail" size={14} stroke={2} />
-                          Email us to confirm
+                          <Icon name="calendar" size={14} stroke={2} />
+                          Schedule on Cal.com
                           <Icon name="arrow-right" size={14} stroke={2.2} />
                         </a>
-
                         <p
                           style={{
-                            marginTop: 14,
                             fontSize: 11,
                             color: 'var(--text-4)',
-                            textAlign: 'center',
+                            margin: 0,
                             fontFamily: "'JetBrains Mono', monospace",
                             letterSpacing: '0.04em',
                           }}
                         >
-                          or reply &lt; 4 business hours
+                          opens in a new tab · no account needed
                         </p>
-                      </>
+                      </div>
                     }
                   />
                 </div>

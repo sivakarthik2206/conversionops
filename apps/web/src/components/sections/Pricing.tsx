@@ -77,8 +77,8 @@ const PLANS: Plan[] = [
       '99.95% SLA guarantee',
       'Single sign-on (SAML)',
     ],
-    cta: 'Contact sales',
-    ctaHref: 'mailto:hello@conversionops.in',
+    cta: 'Book a call',
+    ctaHref: '/book',
     featured: false,
   },
 ];

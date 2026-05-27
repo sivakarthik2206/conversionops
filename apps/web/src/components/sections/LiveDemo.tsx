@@ -556,8 +556,7 @@ export default function LiveDemo() {
                         <span>
                           {msg.text.replace('cal.com/miami-premier/sarah', '')}{' '}
                           <a
-                            href="#"
-                            onClick={e => e.preventDefault()}
+                            href="/book"
                             style={{
                               color: isAi ? 'var(--blue)' : '#0a0a0b',
                               textDecoration: 'underline',
