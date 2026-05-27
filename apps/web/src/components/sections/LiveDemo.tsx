@@ -38,7 +38,7 @@ const CHAT_MSGS: { delay: number; msg: ChatMsg; typing?: number }[] = [
   { delay: 7600, msg: { id: 2, role: 'lead', text: "We're hoping to move in about 60 days. Already pre-approved for $850k.", ts: '2:14 PM' } },
   { delay: 10500, msg: { id: 3, role: 'ai', text: "Perfect timing! $850k gives you great options in Coral Gables. Are you open to South Miami or Coconut Grove, or strictly Coral Gables?", ts: '2:14 PM' } },
   { delay: 15200, msg: { id: 4, role: 'lead', text: 'Coral Gables preferred but open to Coconut Grove.', ts: '2:15 PM' } },
-  { delay: 18000, msg: { id: 5, role: 'ai', text: "Got it — I'm pulling Sarah Chen's calendar (our Coral Gables specialist). Here's a 15-min call: cal.com/miami-premier/sarah", ts: '2:15 PM' } },
+  { delay: 18000, msg: { id: 5, role: 'ai', text: "Got it — I'm connecting you with Sarah Chen, our Coral Gables specialist. Sending a calendar link now.", ts: '2:15 PM' } },
   { delay: 21500, msg: { id: 6, role: 'booking', text: 'Appointment booked · Tomorrow 2:00 PM with Sarah Chen', ts: '2:16 PM' } },
 ];
 
@@ -552,24 +552,7 @@ export default function LiveDemo() {
                         boxShadow: isAi ? 'none' : '0 4px 14px rgba(232,255,71,0.20)',
                       }}
                     >
-                      {msg.text.includes('cal.com') ? (
-                        <span>
-                          {msg.text.replace('cal.com/miami-premier/sarah', '')}{' '}
-                          <a
-                            href="/book"
-                            style={{
-                              color: isAi ? 'var(--blue)' : '#0a0a0b',
-                              textDecoration: 'underline',
-                              textUnderlineOffset: 2,
-                              fontWeight: 600,
-                            }}
-                          >
-                            cal.com/miami-premier/sarah
-                          </a>
-                        </span>
-                      ) : (
-                        msg.text
-                      )}
+                      {msg.text}
                     </div>
                     {msg.ts && (
                       <div
@@ -673,7 +656,9 @@ export default function LiveDemo() {
               </button>
               <span style={{ flex: 1 }} />
               <a
-                href="/book"
+                href="https://calendar.app.google/qJw5n9evBZ8ciiuV9"
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',

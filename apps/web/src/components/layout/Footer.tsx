@@ -6,27 +6,27 @@ const COLUMNS = [
   {
     title: 'Product',
     items: [
-      { label: 'Features',    href: '/#features' },
-      { label: 'Live demo',   href: '/#demo' },
-      { label: 'Pricing',     href: '/pricing' },
-      { label: 'Schedule',    href: '/book' },
+      { label: 'Features',    href: '/#features',                                         external: false },
+      { label: 'Live demo',   href: '/#demo',                                             external: false },
+      { label: 'Pricing',     href: '/pricing',                                           external: false },
+      { label: 'Schedule',    href: 'https://calendar.app.google/qJw5n9evBZ8ciiuV9',     external: true  },
     ],
   },
   {
     title: 'Company',
     items: [
-      { label: 'Book a demo',  href: '/book' },
-      { label: 'Contact us',   href: '/book' },
-      { label: 'Sign in',      href: 'https://app.conversionops.in/login' },
+      { label: 'Book a demo',  href: 'https://calendar.app.google/qJw5n9evBZ8ciiuV9',   external: true  },
+      { label: 'Contact us',   href: 'https://calendar.app.google/qJw5n9evBZ8ciiuV9',   external: true  },
+      { label: 'Sign in',      href: 'https://app.conversionops.in/login',               external: false },
     ],
   },
   {
     title: 'Legal',
     items: [
-      { label: 'Privacy Policy',   href: '/legal/privacy' },
-      { label: 'Terms of Service', href: '/legal/terms' },
-      { label: 'TCPA Compliance',  href: '/legal/privacy#tcpa' },
-      { label: 'Fair Housing',     href: '/legal/privacy#fair-housing' },
+      { label: 'Privacy Policy',   href: '/legal/privacy',           external: false },
+      { label: 'Terms of Service', href: '/legal/terms',             external: false },
+      { label: 'TCPA Compliance',  href: '/legal/privacy#tcpa',      external: false },
+      { label: 'Fair Housing',     href: '/legal/privacy#fair-housing', external: false },
     ],
   },
 ];
@@ -202,6 +202,7 @@ export default function Footer() {
                 <a
                   key={item.label}
                   href={item.href}
+                  {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   style={{
                     fontSize: 14,
                     color: 'var(--text-3)',

@@ -158,8 +158,10 @@ export default function Navbar() {
             >
               Sign in
             </Link>
-            <Link
-              href="/book"
+            <a
+              href="https://calendar.app.google/qJw5n9evBZ8ciiuV9"
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -189,7 +191,7 @@ export default function Navbar() {
             >
               Schedule
               <Icon name="arrow-right" size={14} stroke={2} />
-            </Link>
+            </a>
           </div>
 
           {/* Mobile hamburger */}
@@ -293,8 +295,10 @@ export default function Navbar() {
           >
             Sign in
           </Link>
-          <Link
-            href="/book"
+          <a
+            href="https://calendar.app.google/qJw5n9evBZ8ciiuV9"
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={() => setMenuOpen(false)}
             className="btn-primary animate-fade-up"
             style={{
@@ -308,7 +312,7 @@ export default function Navbar() {
           >
             Schedule
             <Icon name="arrow-right" size={16} stroke={2} />
-          </Link>
+          </a>
         </div>
       )}
 

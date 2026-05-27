@@ -115,7 +115,7 @@ function FinalCTA() {
 
         <Reveal delay={3}>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a href="/book" className="btn-primary">
+            <a href="https://calendar.app.google/qJw5n9evBZ8ciiuV9" target="_blank" rel="noopener noreferrer" className="btn-primary">
               Schedule
               <Icon name="arrow-right" size={16} stroke={2.2} />
             </a>

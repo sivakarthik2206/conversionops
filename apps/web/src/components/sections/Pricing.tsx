@@ -38,7 +38,7 @@ const PLANS: Plan[] = [
       'Email support',
     ],
     cta: 'Schedule',
-    ctaHref: '/book',
+    ctaHref: 'https://calendar.app.google/qJw5n9evBZ8ciiuV9',
     featured: false,
   },
   {
@@ -58,7 +58,7 @@ const PLANS: Plan[] = [
       'Priority support · 4-hr SLA',
     ],
     cta: 'Schedule',
-    ctaHref: '/book',
+    ctaHref: 'https://calendar.app.google/qJw5n9evBZ8ciiuV9',
     featured: true,
   },
   {
@@ -78,7 +78,7 @@ const PLANS: Plan[] = [
       'Single sign-on (SAML)',
     ],
     cta: 'Schedule',
-    ctaHref: '/book',
+    ctaHref: 'https://calendar.app.google/qJw5n9evBZ8ciiuV9',
     featured: false,
   },
 ];
@@ -502,6 +502,8 @@ function PlanCard({ plan, annual }: { plan: Plan; annual: boolean }) {
       {/* CTA */}
       <a
         href={plan.ctaHref}
+        target="_blank"
+        rel="noopener noreferrer"
         className={plan.featured ? 'btn-primary' : 'btn-ghost'}
         style={{ width: '100%', justifyContent: 'center', height: 48 }}
       >
