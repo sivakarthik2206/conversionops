@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Skeleton, StatusBadge, EmptyState } from '@conversionops/ui';
@@ -733,7 +733,7 @@ type FilterId = (typeof FILTERS)[number]['id'];
 
 interface ConvPage { items: ConversationSummary[]; nextCursor: string | null; }
 
-export default function ConversationsPage() {
+function ConversationsInbox() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get('id') ?? null;
@@ -999,5 +999,30 @@ export default function ConversationsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ConversationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ display: 'flex', height: 'calc(100vh - 130px)', margin: '-32px -32px 0', overflow: 'hidden', borderTop: '1px solid var(--border)' }}>
+          <div style={{ width: 340, flexShrink: 0, background: 'var(--bg-2)', borderRight: '1px solid var(--border)' }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{ padding: '12px 14px', display: 'flex', gap: 10, borderBottom: '1px solid var(--border)' }}>
+                <Skeleton variant="circle" width={34} height={34} />
+                <div style={{ flex: 1 }}>
+                  <Skeleton variant="text" style={{ marginBottom: 6 }} />
+                  <Skeleton variant="text" width="60%" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ flex: 1, background: 'var(--bg)' }} />
+        </div>
+      }
+    >
+      <ConversationsInbox />
+    </Suspense>
   );
 }
