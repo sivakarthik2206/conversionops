@@ -231,17 +231,19 @@ export default function BookPage() {
                         <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0, lineHeight: 1.6, maxWidth: 320 }}>
                           Pick a time that works for you — no forms, no friction. You&apos;ll get a calendar invite instantly.
                         </p>
-                        <a
-                          href={CAL_LINK ? `https://cal.com/${CAL_LINK}` : 'https://cal.com'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-primary"
-                          style={{ textDecoration: 'none' }}
-                        >
-                          <Icon name="calendar" size={14} stroke={2} />
-                          Schedule on Cal.com
-                          <Icon name="arrow-right" size={14} stroke={2.2} />
-                        </a>
+                        {CAL_LINK && (
+                          <a
+                            href={`https://cal.com/${CAL_LINK}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary"
+                            style={{ textDecoration: 'none' }}
+                          >
+                            <Icon name="calendar" size={14} stroke={2} />
+                            Schedule
+                            <Icon name="arrow-right" size={14} stroke={2.2} />
+                          </a>
+                        )}
                         <p
                           style={{
                             fontSize: 11,

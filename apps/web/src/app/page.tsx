@@ -116,7 +116,7 @@ function FinalCTA() {
         <Reveal delay={3}>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <a href="/book" className="btn-primary">
-              Start free trial
+              Schedule
               <Icon name="arrow-right" size={16} stroke={2.2} />
             </a>
             <a href="/pricing" className="btn-ghost">

@@ -135,7 +135,7 @@ export default function DemoPage() {
           <Reveal delay={2}>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <a href="/book" className="btn-primary">
-                Start free trial
+                Schedule
                 <Icon name="arrow-right" size={14} stroke={2.2} />
               </a>
               <a href="/pricing" className="btn-ghost">

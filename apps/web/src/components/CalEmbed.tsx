@@ -10,7 +10,8 @@ export function CalEmbed({ fallback }: { fallback: ReactNode }) {
 
   if (!CAL_LINK) return <>{fallback}</>;
 
-  const src = `https://cal.com/${CAL_LINK}?embed=1&theme=dark&layout=month_view`;
+  // Cal.com public embed URL — no layout= param; that's JS-API only.
+  const src = `https://cal.com/${CAL_LINK}?embed=1&theme=dark`;
   const directUrl = `https://cal.com/${CAL_LINK}`;
 
   if (failed) {
@@ -40,7 +41,7 @@ export function CalEmbed({ fallback }: { fallback: ReactNode }) {
           className="btn-primary"
           style={{ textDecoration: 'none' }}
         >
-          Open booking page ↗
+          Schedule ↗
         </a>
       </div>
     );
@@ -108,7 +109,7 @@ export function CalEmbed({ fallback }: { fallback: ReactNode }) {
       )}
       <iframe
         src={src}
-        title="Book a demo with ConversionOps"
+        title="Schedule a demo with ConversionOps"
         loading="lazy"
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}

@@ -240,7 +240,7 @@ export default function Hero() {
             style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
           >
             <a href="/book" className="btn-primary">
-              Start free trial
+              Schedule
               <Icon name="arrow-right" size={16} stroke={2.2} />
             </a>
             <a href="#demo" className="btn-ghost">

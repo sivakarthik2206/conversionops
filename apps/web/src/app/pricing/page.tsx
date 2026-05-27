@@ -177,7 +177,7 @@ export default function PricingPage() {
               </p>
             </div>
             <a href="/book" className="btn-primary">
-              Book a demo
+              Schedule
               <Icon name="arrow-right" size={14} stroke={2.2} />
             </a>
           </div>

@@ -689,7 +689,7 @@ export default function LiveDemo() {
                   boxShadow: '0 4px 12px rgba(232,255,71,0.30)',
                 }}
               >
-                Try with your own number
+                Schedule
                 <Icon name="arrow-right" size={12} stroke={2.2} />
               </a>
             </div>

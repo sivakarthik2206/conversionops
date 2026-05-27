@@ -187,7 +187,7 @@ export default function Navbar() {
                 el.style.boxShadow = '0 4px 14px rgba(232,255,71,0.25), inset 0 1px 0 rgba(255,255,255,0.45)';
               }}
             >
-              Get started
+              Schedule
               <Icon name="arrow-right" size={14} stroke={2} />
             </Link>
           </div>
@@ -306,7 +306,7 @@ export default function Navbar() {
               fontSize: 16,
             }}
           >
-            Get started
+            Schedule
             <Icon name="arrow-right" size={16} stroke={2} />
           </Link>
         </div>
