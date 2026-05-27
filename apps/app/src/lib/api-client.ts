@@ -61,18 +61,28 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-const _apiUrl = process.env['NEXT_PUBLIC_API_URL'];
-if (!_apiUrl && process.env.NODE_ENV === 'production') {
-  throw new Error('[ConversionOps] NEXT_PUBLIC_API_URL must be set in production');
+function resolveBaseURL(): string {
+  const url = process.env['NEXT_PUBLIC_API_URL'];
+  if (!url && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[ConversionOps] NEXT_PUBLIC_API_URL is not configured. ' +
+      'Set this environment variable in your Vercel project settings.',
+    );
+  }
+  return url ?? 'http://localhost:3001/v1';
 }
-const baseURL = _apiUrl ?? 'http://localhost:3001/v1';
+
+function getBaseURL(): string {
+  if (typeof window === 'undefined') return process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/v1';
+  return resolveBaseURL();
+}
 
 export const apiClient = {
   /**
    * GET request with optional query params.
    */
   async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
-    let url = `${baseURL}${path}`;
+    let url = `${getBaseURL()}${path}`;
     if (params) {
       const query = new URLSearchParams();
       for (const [key, value] of Object.entries(params)) {
@@ -85,11 +95,8 @@ export const apiClient = {
     return handleResponse<T>(res);
   },
 
-  /**
-   * POST request with JSON body.
-   */
   async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${baseURL}${path}`, {
+    const res = await fetch(`${getBaseURL()}${path}`, {
       method: 'POST',
       headers: buildHeaders(),
       body: JSON.stringify(body),
@@ -97,11 +104,8 @@ export const apiClient = {
     return handleResponse<T>(res);
   },
 
-  /**
-   * PATCH request with JSON body.
-   */
   async patch<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${baseURL}${path}`, {
+    const res = await fetch(`${getBaseURL()}${path}`, {
       method: 'PATCH',
       headers: buildHeaders(),
       body: JSON.stringify(body),
@@ -109,11 +113,8 @@ export const apiClient = {
     return handleResponse<T>(res);
   },
 
-  /**
-   * DELETE request.
-   */
   async delete<T>(path: string): Promise<T> {
-    const res = await fetch(`${baseURL}${path}`, {
+    const res = await fetch(`${getBaseURL()}${path}`, {
       method: 'DELETE',
       headers: buildHeaders(),
     });
