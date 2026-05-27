@@ -100,7 +100,7 @@ export default function AIPlaygroundPage() {
           AI Playground
         </h2>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-3)' }}>
-          Test prompts against any workspace's AI config using Vertex AI Gemini
+          Test prompts against any workspace&apos;s AI config using Vertex AI Gemini
         </p>
       </div>
 
@@ -343,7 +343,7 @@ export default function AIPlaygroundPage() {
           </button>
         </div>
         <p style={{ margin: '6px 0 0', fontSize: 10, color: 'var(--text-4)', paddingLeft: 4 }}>
-          Queries go directly to Vertex AI Gemini using the selected workspace's AI configuration and system prompt.
+          Queries go directly to Vertex AI Gemini using the selected workspace&apos;s AI configuration and system prompt.
         </p>
       </div>
     </div>
