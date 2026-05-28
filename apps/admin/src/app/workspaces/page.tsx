@@ -42,7 +42,10 @@ export default function WorkspacesPage() {
   const fetchWorkspaces = useCallback(async () => {
     try {
       const res = await fetch(`${API}/admin/workspaces`, { headers: { 'x-admin-api-key': ADMIN_KEY } });
-      if (res.ok) setWorkspaces(await res.json() as Workspace[]);
+      if (res.ok) {
+        const data = await res.json();
+        setWorkspaces((Array.isArray(data) ? data : data.items ?? []) as Workspace[]);
+      }
     } catch {
       // ignore
     } finally {

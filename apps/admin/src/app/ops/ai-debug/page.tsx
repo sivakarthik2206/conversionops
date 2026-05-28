@@ -27,9 +27,10 @@ export default function AIDebugPage() {
   useEffect(() => {
     void fetch(`${API}/admin/workspaces`, { headers: { 'x-admin-api-key': ADMIN_KEY } })
       .then(r => r.json())
-      .then((data: Workspace[]) => {
-        setWorkspaces(data);
-        if (data[0]) setSelectedWs(data[0].id);
+      .then((raw: unknown) => {
+        const list = (Array.isArray(raw) ? raw : (raw as { items?: Workspace[] }).items ?? []) as Workspace[];
+        setWorkspaces(list);
+        if (list[0]) setSelectedWs(list[0].id);
       })
       .catch(() => undefined);
   }, []);

@@ -25,7 +25,8 @@ async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
       cache: 'no-store',
     });
     if (!res.ok) return [];
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.items ?? []);
   } catch {
     return [];
   }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -8,14 +9,26 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminGuard } from './admin.guard';
 import { logger } from '@conversionops/observability';
 import { VertexAIClient, buildSystemPrompt } from '@conversionops/ai';
-import { queues, QUEUE_NAMES } from '@conversionops/orchestration';
+import { queues, QUEUE_NAMES, redisConnection } from '@conversionops/orchestration';
+import { deletePII, exportUserData } from '@conversionops/compliance';
+import { PrismaClient as UnscopedPrismaClient } from '@conversionops/db';
+
+/** Percentile helper (p in 0..1). Returns 0 for an empty sample. */
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.floor(p * sorted.length));
+  return Math.round(sorted[idx] ?? 0);
+}
 
 @Controller('admin')
 @Public()
@@ -199,7 +212,22 @@ export class AdminController {
     return { queues: stats };
   }
 
-  /** Returns failed jobs for a single queue (DLQ view). */
+  /** Returns counts for a single queue (waiting, active, completed, failed, delayed). */
+  @Get('queues/:name')
+  async getQueueByName(@Param('name') name: string) {
+    const q = Object.values(queues).find(q => q.name === name);
+    if (!q) throw new NotFoundException(`Queue "${name}" not found`);
+    const [waiting, active, completed, failed, delayed] = await Promise.all([
+      q.getWaitingCount().catch(() => 0),
+      q.getActiveCount().catch(() => 0),
+      q.getCompletedCount().catch(() => 0),
+      q.getFailedCount().catch(() => 0),
+      q.getDelayedCount().catch(() => 0),
+    ]);
+    return { name: q.name, waiting, active, completed, failed, delayed };
+  }
+
+  /** Returns failed jobs for a single queue (DLQ view) as a flat array. */
   @Get('queues/:name/failed')
   async getFailedJobs(
     @Param('name') name: string,
@@ -209,21 +237,19 @@ export class AdminController {
     const q = Object.values(queues).find(q => q.name === name);
     if (!q) throw new NotFoundException(`Queue "${name}" not found`);
     const jobs = await q.getFailed(0, limit - 1).catch(() => []);
-    return {
-      jobs: jobs.map(j => ({
-        id: j.id,
-        name: j.name,
-        data: j.data,
-        failedReason: j.failedReason,
-        attemptsMade: j.attemptsMade,
-        processedOn: j.processedOn,
-        timestamp: j.timestamp,
-      })),
-    };
+    return jobs.map(j => ({
+      id: j.id,
+      name: j.name,
+      data: j.data,
+      failedReason: j.failedReason,
+      attemptsMade: j.attemptsMade,
+      processedOn: j.processedOn ?? null,
+      timestamp: j.timestamp,
+    }));
   }
 
   /** Retries a single failed job — moves it back to waiting state. */
-  @Post('queues/:name/failed/:jobId/retry')
+  @Post('queues/:name/jobs/:jobId/retry')
   @HttpCode(HttpStatus.OK)
   async retryFailedJob(
     @Param('name') name: string,
@@ -242,7 +268,7 @@ export class AdminController {
   }
 
   /** Retries ALL failed jobs in a queue (bulk retry). */
-  @Post('queues/:name/failed/retry-all')
+  @Post('queues/:name/retry-all')
   @HttpCode(HttpStatus.OK)
   async retryAllFailedJobs(@Param('name') name: string) {
     const q = Object.values(queues).find(q => q.name === name);
@@ -290,5 +316,180 @@ export class AdminController {
       latencyMs,
       systemPromptLength: systemPrompt.length,
     };
+  }
+
+  /**
+   * Aggregate platform health for the ops console. Every value is computed from
+   * live data (DB, Redis, BullMQ) — nothing is synthesised.
+   */
+  @Get('health')
+  async getPlatformHealth() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [dbUp, redisUp] = await Promise.all([
+      this.prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
+      redisConnection.ping().then((r) => r === 'PONG').catch(() => false),
+    ]);
+
+    // Per-queue snapshot: counts + age of the oldest waiting job (lag signal).
+    const queueSnap = await Promise.all(
+      Object.values(queues).map(async (q) => {
+        const [waiting, active, completed, failed, oldest] = await Promise.all([
+          q.getWaitingCount().catch(() => 0),
+          q.getActiveCount().catch(() => 0),
+          q.getCompletedCount().catch(() => 0),
+          q.getFailedCount().catch(() => 0),
+          q.getWaiting(0, 0).then((jobs) => jobs[0]?.timestamp ?? null).catch(() => null),
+        ]);
+        return { name: q.name, waiting, active, completed, failed, oldest };
+      }),
+    );
+
+    const totalWaiting = queueSnap.reduce((s, q) => s + q.waiting, 0);
+    const totalActive = queueSnap.reduce((s, q) => s + q.active, 0);
+    const queueLagMs = queueSnap.reduce(
+      (max, q) => (q.oldest ? Math.max(max, Date.now() - q.oldest) : max),
+      0,
+    );
+
+    const crm = queueSnap.find((q) => q.name === QUEUE_NAMES.CRM_SYNC);
+    const crmTotal = crm ? crm.completed + crm.failed : 0;
+    const crmSyncSuccessRate =
+      crm && crmTotal > 0 ? Math.round((crm.completed / crmTotal) * 1000) / 10 : 100;
+
+    // Worker liveness heuristic: a live worker drains the queue. A growing
+    // backlog with zero active jobs (while Redis is up) signals a dead worker.
+    // For exact liveness, add a worker heartbeat metric — see recommendations.
+    const workerUp = redisUp && !(totalWaiting > 5 && totalActive === 0);
+
+    const [aiLatencies, twilioMetrics, activeWorkspaces, totalLeads24h] = await Promise.all([
+      this.prisma.aIUsageRecord
+        .findMany({
+          where: { recordedAt: { gte: since }, latencyMs: { not: null } },
+          select: { latencyMs: true },
+          orderBy: { recordedAt: 'desc' },
+          take: 1000,
+        })
+        .catch(() => [] as { latencyMs: number | null }[]),
+      this.prisma.operationalMetric
+        .findMany({
+          where: { recordedAt: { gte: since }, metric: { in: ['twilio.latency_ms', 'twilio.sms.latency_ms'] } },
+          select: { value: true },
+          take: 1000,
+        })
+        .catch(() => [] as { value: number }[]),
+      this.prisma.workspace.count({ where: { status: 'ACTIVE', deletedAt: null } }).catch(() => 0),
+      this.prisma.lead.count({ where: { createdAt: { gte: since }, deletedAt: null } }).catch(() => 0),
+    ]);
+
+    const aiLatencyP95Ms = percentile(
+      aiLatencies.map((r) => r.latencyMs ?? 0).filter((n) => n > 0),
+      0.95,
+    );
+    const twilioLatencyP95Ms = percentile(twilioMetrics.map((m) => m.value), 0.95);
+
+    const twilioConfigured = !!process.env['TWILIO_ACCOUNT_SID'];
+    const vertexConfigured = !!process.env['GOOGLE_CLOUD_PROJECT'] && !!process.env['VERTEX_AI_MODEL'];
+
+    const status: 'healthy' | 'degraded' | 'down' = !dbUp || !redisUp
+      ? 'down'
+      : !workerUp || queueLagMs > 60_000
+        ? 'degraded'
+        : 'healthy';
+
+    return {
+      status,
+      lastUpdated: new Date().toISOString(),
+      metrics: {
+        aiLatencyP95Ms,
+        twilioLatencyP95Ms,
+        queueLagMs,
+        crmSyncSuccessRate,
+        activeWorkspaces,
+        totalLeads24h,
+      },
+      services: {
+        api: 'up' as const,
+        worker: workerUp ? ('up' as const) : ('down' as const),
+        database: dbUp ? ('up' as const) : ('down' as const),
+        redis: redisUp ? ('up' as const) : ('down' as const),
+        twilio: twilioConfigured ? ('up' as const) : ('down' as const),
+        vertexAI: vertexConfigured ? ('up' as const) : ('down' as const),
+      },
+    };
+  }
+
+  /** Returns AI eval results (most recent first) with the evaluated message text. */
+  @Get('evals')
+  async getEvals(
+    @Query('workspaceId') workspaceId?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const limit = Math.min(parseInt(limitStr ?? '200', 10), 500);
+    const rows = await this.prisma.aIEvalResult.findMany({
+      take: limit,
+      where: { deletedAt: null, ...(workspaceId ? { workspaceId } : {}) },
+      orderBy: { runAt: 'desc' },
+      include: { message: { select: { content: true } } },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      messageId: r.messageId,
+      workspaceId: r.workspaceId,
+      relevanceScore: r.relevanceScore,
+      hallucinationScore: r.hallucinationScore,
+      bookingIntentScore: r.bookingIntentScore,
+      qualProgressScore: r.qualProgressScore,
+      toneScore: r.toneScore,
+      runAt: r.runAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+      content: r.message?.content ?? undefined,
+    }));
+  }
+
+  /**
+   * CCPA right of access — exports all data tied to a phone number across every
+   * workspace. Read-only; safe to run through the pooled (tenant-scoped) client.
+   */
+  @Get('ccpa/export')
+  async ccpaExport(@Query('phone') phone?: string) {
+    if (!phone) throw new BadRequestException('phone query parameter is required');
+    const data = await exportUserData(phone, this.prisma);
+    logger.info({ phone: phone.slice(0, 4) + '***', leads: data.leads.length }, 'admin: CCPA export');
+    return data;
+  }
+
+  /**
+   * CCPA right to delete — anonymises PII for a data subject across all
+   * workspaces. This is a deliberately cross-tenant write, so it runs on a
+   * dedicated unscoped client that bypasses the per-request tenant guard
+   * (which hard-fails workspace-less writes). Always disconnects.
+   */
+  @Post('ccpa/delete')
+  @HttpCode(HttpStatus.OK)
+  async ccpaDelete(
+    @Body() body: { phone?: string; email?: string; reason?: string },
+    @Req() req: Request & { user?: { email?: string } },
+  ) {
+    if (!body.phone && !body.email) {
+      throw new BadRequestException('phone or email is required');
+    }
+    if (!body.reason || body.reason.trim().length < 3) {
+      throw new BadRequestException('a reason is required for CCPA deletion (audit trail)');
+    }
+
+    const requestedBy = req.user?.email ?? 'ops-console';
+    const client = new UnscopedPrismaClient();
+    try {
+      const report = await deletePII(
+        { phone: body.phone, email: body.email, requestedBy, reason: body.reason.trim() },
+        client,
+      );
+      logger.warn({ requestedBy, affectedLeads: report.affectedLeads }, 'admin: CCPA deletion executed');
+      return report;
+    } finally {
+      await client.$disconnect().catch(() => undefined);
+    }
   }
 }

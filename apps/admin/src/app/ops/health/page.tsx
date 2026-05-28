@@ -37,7 +37,7 @@ const SERVICE_META: Record<string, { label: string; icon: Parameters<typeof Icon
 
 async function fetchHealth(): Promise<PlatformHealth> {
   const res = await fetch(`${API}/admin/health`, {
-    headers: { Authorization: `Bearer ${ADMIN_KEY}` },
+    headers: { 'x-admin-api-key': ADMIN_KEY },
   });
   if (!res.ok) throw new Error(`Failed: ${res.status}`);
   return res.json() as Promise<PlatformHealth>;
