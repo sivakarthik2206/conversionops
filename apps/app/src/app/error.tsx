@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Icon } from '@/components/Icon';
 
 interface ErrorPageProps {
@@ -8,6 +9,12 @@ interface ErrorPageProps {
 }
 
 export default function GlobalError({ error, reset }: ErrorPageProps) {
+  useEffect(() => {
+    // Surface the error to the server log pipeline (Vercel log drains / Sentry)
+    // so "our team has been notified" is actually true.
+    console.error('[app:error-boundary]', error);
+  }, [error]);
+
   return (
     <div
       style={{

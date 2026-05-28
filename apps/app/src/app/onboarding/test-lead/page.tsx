@@ -24,10 +24,19 @@ export default function TestLeadPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [leadScore, setLeadScore] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scoreIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Clear any in-flight score animation if the user navigates away mid-count,
+  // preventing a setState-on-unmounted warning and a leaked interval.
+  useEffect(() => {
+    return () => {
+      if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+    };
+  }, []);
 
   const addMessage = (role: 'HUMAN' | 'AI', content: string) => {
     setMessages(prev => [...prev, { id: `${role}-${Date.now()}-${Math.random()}`, role, content }]);
@@ -36,10 +45,14 @@ export default function TestLeadPage() {
   const animateScore = (target: number) => {
     let current = 0;
     const step = target / 40;
-    const interval = setInterval(() => {
+    if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+    scoreIntervalRef.current = setInterval(() => {
       current = Math.min(current + step, target);
       setLeadScore(Math.round(current));
-      if (current >= target) clearInterval(interval);
+      if (current >= target && scoreIntervalRef.current) {
+        clearInterval(scoreIntervalRef.current);
+        scoreIntervalRef.current = null;
+      }
     }, 30);
   };
 
