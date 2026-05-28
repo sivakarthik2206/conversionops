@@ -59,7 +59,7 @@ export default function IntegrationsPage() {
     finally { setSaving(false); }
   };
 
-  const zapierUrl = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'https://api.conversionops.io/v1'}/webhooks/lead`;
+  const zapierUrl = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/v1'}/webhooks/lead`;
 
   const copyZapierUrl = () => {
     void navigator.clipboard.writeText(zapierUrl);

@@ -33,8 +33,7 @@ async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
 
 async function fetchHealth(): Promise<HealthSummary | null> {
   try {
-    const res = await fetch(`${API}/workspaces/me/health`, {
-      headers: { 'x-admin-api-key': ADMIN_KEY },
+    const res = await fetch(`${API}/health`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;

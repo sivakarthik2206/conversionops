@@ -23,7 +23,12 @@ function VerifyContent() {
     void (async () => {
       try {
         const data = await apiClient.post<{ token: string; user: { email: string } }>('/auth/verify', { token });
-        if (typeof window !== 'undefined') localStorage.setItem('auth_token', data.token);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('auth_token', data.token);
+          const maxAge = 7 * 24 * 60 * 60;
+          const secure = location.protocol === 'https:' ? '; Secure' : '';
+          document.cookie = `auth_token=${data.token}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
+        }
         setStatus('success');
         setTimeout(() => router.push('/'), 1200);
       } catch {
