@@ -5,6 +5,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config(); // fallback
 
 import 'reflect-metadata';
+import { createServer } from 'http';
 import { NestFactory } from '@nestjs/core';
 import { logger, initTracing } from '@conversionops/observability';
 
@@ -32,6 +33,21 @@ async function bootstrap(): Promise<void> {
     logger: false,
   });
 
+  // Cloud Run *services* require the container to listen on $PORT, even though
+  // this process is a BullMQ consumer with no public API. A tiny health server
+  // satisfies that contract and exposes liveness for probes/uptime checks.
+  const port = parseInt(process.env['PORT'] ?? '8080', 10);
+  const healthServer = createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/' || req.url === '/healthz') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', service: 'worker', uptime: Math.floor(process.uptime()) }));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  healthServer.listen(port, () => logger.info({ port }, 'Worker health server listening'));
+
   logger.info({ nodeEnv: process.env['NODE_ENV'] }, 'ConversionOps worker started');
 
   let isShuttingDown = false;
@@ -41,6 +57,7 @@ async function bootstrap(): Promise<void> {
     isShuttingDown = true;
     logger.info({ signal }, 'Worker shutting down — draining in-flight jobs (max 30s)');
     try {
+      healthServer.close();
       await app.close();
       logger.info('Worker shutdown complete');
     } catch (err) {

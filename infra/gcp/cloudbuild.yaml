@@ -100,8 +100,9 @@ steps:
         wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.1/cloud-sql-proxy.linux.amd64 -O cloud-sql-proxy
         chmod +x cloud-sql-proxy
 
-        echo "Starting Cloud SQL Proxy for migration..."
-        ./cloud-sql-proxy --port=5432 $_DB_INSTANCE &
+        echo "Starting Cloud SQL Proxy (unix socket) for migration..."
+        mkdir -p /cloudsql
+        ./cloud-sql-proxy --unix-socket /cloudsql $_DB_INSTANCE &
         PROXY_PID=$!
         sleep 5
 
@@ -139,8 +140,12 @@ steps:
           --memory=512Mi \
           --timeout=60 \
           --no-cpu-throttling \
-          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,MAGIC_LINK_SECRET=MAGIC_LINK_SECRET:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest,RESEND_API_KEY=RESEND_API_KEY:latest,ADMIN_API_KEY=ADMIN_API_KEY:latest,CALCOM_WEBHOOK_SECRET=CALCOM_WEBHOOK_SECRET:latest \
-          --set-env-vars=NODE_ENV=production,PORT=3001,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001,API_BASE_URL=https://api.conversionops.in \
+          --add-cloudsql-instances=$_DB_INSTANCE \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,MAGIC_LINK_SECRET=MAGIC_LINK_SECRET:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,ADMIN_API_KEY=ADMIN_API_KEY:latest,CALCOM_WEBHOOK_SECRET=CALCOM_WEBHOOK_SECRET:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001,API_BASE_URL=https://api.conversionops.in,APP_URL=https://app.conversionops.in \
           --tag=commit-$SHORT_SHA \
           --revision-suffix=$SHORT_SHA
         echo "API deployed successfully"
@@ -197,7 +202,7 @@ steps:
           --image=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/worker:$COMMIT_SHA \
           --region=$_REGION \
           --platform=managed \
-          --service-account=$_SA_EMAIL \
+          --service-account=$_WORKER_SA_EMAIL \
           --no-allow-unauthenticated \
           --min-instances=1 \
           --max-instances=3 \
@@ -206,7 +211,11 @@ steps:
           --memory=1Gi \
           --timeout=300 \
           --no-cpu-throttling \
-          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest,FUB_API_KEY=FUB_API_KEY:latest \
+          --add-cloudsql-instances=$_DB_INSTANCE \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest \
           --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001 \
           --revision-suffix=$SHORT_SHA
         echo "Worker deployed successfully"
@@ -216,8 +225,9 @@ substitutions:
   _AR_REGION: us-central1
   _AR_REPO: conversionops
   _REGION: us-central1
-  _SA_EMAIL: conversionops-runner@PROJECT_ID.iam.gserviceaccount.com
-  _DB_INSTANCE: PROJECT_ID:us-central1:conversionops-db
+  _SA_EMAIL: conversionops-api@conversionops-prod.iam.gserviceaccount.com
+  _WORKER_SA_EMAIL: conversionops-worker@conversionops-prod.iam.gserviceaccount.com
+  _DB_INSTANCE: conversionops-prod:us-central1:conversionops-db
 
 availableSecrets:
   secretManager:
