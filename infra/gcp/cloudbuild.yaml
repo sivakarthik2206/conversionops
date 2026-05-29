@@ -103,7 +103,7 @@ steps:
         echo "Starting Cloud SQL Proxy (unix socket) for migration..."
         mkdir -p /cloudsql
         ./cloud-sql-proxy --unix-socket /cloudsql $_DB_INSTANCE &
-        PROXY_PID=$!
+        PROXY_PID=$$!
         sleep 5
 
         echo "Running Prisma migrations..."
@@ -111,7 +111,7 @@ steps:
         DATABASE_URL="$$DATABASE_URL" pnpm --filter @conversionops/db exec prisma migrate deploy
 
         echo "Migration complete. Stopping proxy..."
-        kill $PROXY_PID 2>/dev/null || true
+        kill $$PROXY_PID 2>/dev/null || true
     waitFor: ['push-api', 'push-worker']
     secretEnv: ['DATABASE_URL']
 
@@ -164,25 +164,25 @@ steps:
         echo "Waiting 15s for API to stabilize..."
         sleep 15
 
-        API_URL=$(gcloud run services describe conversionops-api --region=$_REGION --format='value(status.url)')
-        echo "Testing $API_URL/v1/health/live ..."
+        API_URL=$$(gcloud run services describe conversionops-api --region=$_REGION --format='value(status.url)')
+        echo "Testing $$API_URL/v1/health/live ..."
 
-        RESPONSE=$(curl -sf --max-time 10 "$API_URL/v1/health/live" 2>&1)
-        if echo "$RESPONSE" | grep -q '"alive":true'; then
+        RESPONSE=$$(curl -sf --max-time 10 "$$API_URL/v1/health/live" 2>&1)
+        if echo "$$RESPONSE" | grep -q '"alive":true'; then
           echo "Liveness check PASSED"
         else
-          echo "Liveness check FAILED: $RESPONSE"
+          echo "Liveness check FAILED: $$RESPONSE"
           exit 1
         fi
 
-        RESPONSE=$(curl -sf --max-time 15 "$API_URL/v1/health/ready" 2>&1)
-        if echo "$RESPONSE" | grep -q '"ready":true'; then
+        RESPONSE=$$(curl -sf --max-time 15 "$$API_URL/v1/health/ready" 2>&1)
+        if echo "$$RESPONSE" | grep -q '"ready":true'; then
           echo "Readiness check PASSED"
         else
-          echo "Readiness check FAILED: $RESPONSE"
+          echo "Readiness check FAILED: $$RESPONSE"
           echo "Rolling back API to previous revision..."
-          PREV=$(gcloud run revisions list --service=conversionops-api --region=$_REGION --format='value(name)' --sort-by=~createdAt --limit=2 | tail -n1)
-          gcloud run services update-traffic conversionops-api --region=$_REGION --to-revisions=$PREV=100
+          PREV=$$(gcloud run revisions list --service=conversionops-api --region=$_REGION --format='value(name)' --sort-by=~createdAt --limit=2 | tail -n1)
+          gcloud run services update-traffic conversionops-api --region=$_REGION --to-revisions=$$PREV=100
           exit 1
         fi
     waitFor: ['deploy-api']
