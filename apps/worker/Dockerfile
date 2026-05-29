@@ -1,37 +1,21 @@
-FROM node:20-alpine AS deps
-WORKDIR /app
-RUN npm install -g pnpm@9 --quiet
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/worker/package.json apps/worker/
-COPY packages/ai/package.json packages/ai/
-COPY packages/compliance/package.json packages/compliance/
-COPY packages/db/package.json packages/db/
-COPY packages/integrations/package.json packages/integrations/
-COPY packages/observability/package.json packages/observability/
-COPY packages/orchestration/package.json packages/orchestration/
-COPY packages/sdk-standards/package.json packages/sdk-standards/
-COPY packages/types/package.json packages/types/
-RUN pnpm install --frozen-lockfile --prod
-
+# ConversionOps Worker — pnpm monorepo build (see apps/api/Dockerfile for the
+# rationale behind shipping the whole built /app rather than just dist).
 FROM node:20-alpine AS builder
 WORKDIR /app
-RUN npm install -g pnpm@9 --quiet
-COPY --from=deps /app/node_modules ./node_modules
+RUN apk add --no-cache openssl && npm install -g pnpm@9 --quiet
 COPY . .
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @conversionops/db exec prisma generate
+RUN pnpm run build:packages
 RUN pnpm --filter @conversionops/worker run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# Non-root user for container security
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 worker
-# Copy only compiled output and production node_modules (no source)
-COPY --from=builder --chown=worker:nodejs /app/apps/worker/dist ./dist
-COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=worker:nodejs /app/packages/db/prisma/schema.prisma ./prisma/schema.prisma
+RUN apk add --no-cache openssl && addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 worker
+COPY --from=builder --chown=worker:nodejs /app ./
 USER worker
-# Worker has no HTTP port — liveness is determined by process health
+EXPOSE 8080
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "process.exit(0)" || exit 1
-CMD ["node", "dist/main"]
+  CMD node -e "require('http').get('http://localhost:'+(process.env.PORT||8080)+'/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+CMD ["node", "apps/worker/dist/main"]

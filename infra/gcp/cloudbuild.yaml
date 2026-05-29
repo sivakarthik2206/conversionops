@@ -14,7 +14,15 @@ steps:
     entrypoint: sh
     args:
       - '-c'
-      - 'npm install -g pnpm@9 --quiet && pnpm install --frozen-lockfile'
+      - |
+        set -e
+        npm install -g pnpm@9 --quiet
+        pnpm install --frozen-lockfile
+        # Generate Prisma client and build workspace packages so the quality
+        # gates (type-check/lint/test) can resolve @conversionops/* + @prisma/client.
+        # /workspace persists across Cloud Build steps, so this runs once here.
+        pnpm --filter @conversionops/db exec prisma generate
+        pnpm run build:packages
 
   ###############################################################################
   # 2. QUALITY GATES — run in parallel after install
