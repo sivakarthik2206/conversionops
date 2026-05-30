@@ -1,0 +1,32 @@
+################################################################################
+# ConversionOps — Single-image rebuild for the API.
+# Used to ship targeted fixes (e.g. missing runtime deps) without rerunning the
+# full quality-gate pipeline. Layer cache makes this ~3–5 minutes.
+################################################################################
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build-api
+    args:
+      - 'build'
+      - '--cache-from=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:latest'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:$_TAG'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api:latest'
+      - '-f'
+      - 'apps/api/Dockerfile'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-api
+    args: ['push', '--all-tags', '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/api']
+
+substitutions:
+  _AR_REGION: us-central1
+  _AR_REPO: conversionops
+  _TAG: latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+  substitutionOption: ALLOW_LOOSE
