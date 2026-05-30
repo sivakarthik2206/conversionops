@@ -127,10 +127,24 @@ async function bootstrap(): Promise<void> {
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen(port, '0.0.0.0');
+  console.log(`API_LISTENING: port=${port}`); // sync confirmation for Cloud Run logs
   logger.info({ port, allowedOrigins, nodeEnv: process.env['NODE_ENV'] }, 'ConversionOps API started');
 }
 
+// Surface any pre-bootstrap async failure with a synchronous write so it makes
+// it into the logs before the process exits.
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT_EXCEPTION:', err && err.stack ? err.stack : err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED_REJECTION:', reason);
+});
+
 bootstrap().catch((err) => {
+  // Use a synchronous console.error first: Pino's async transport often does
+  // not flush its buffer before process.exit, causing silent exit(1) on Cloud Run.
+  console.error('FATAL_API_START:', err && (err as Error).stack ? (err as Error).stack : err);
   logger.error({ err }, 'Fatal: failed to start API');
   process.exit(1);
 });
