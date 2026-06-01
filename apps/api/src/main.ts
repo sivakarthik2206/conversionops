@@ -39,6 +39,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:3003',
   'https://app.conversionops.in',
   'https://conversionops.in',
+  'https://www.conversionops.in',
   'https://admin.conversionops.in',
 ];
 
