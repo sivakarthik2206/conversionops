@@ -1,0 +1,7 @@
+{
+  "buildCommand": "cd ../.. && pnpm --filter @conversionops/db exec prisma generate && pnpm --filter @conversionops/admin run build",
+  "installCommand": "cd ../.. && npm install -g pnpm@9 && pnpm install --frozen-lockfile",
+  "outputDirectory": "apps/admin/.next",
+  "framework": "nextjs",
+  "rewrites": [{ "source": "/(.*)", "destination": "/$1" }]
+}
