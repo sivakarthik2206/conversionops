@@ -153,7 +153,7 @@ steps:
           --subnet=default \
           --vpc-egress=private-ranges-only \
           --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,MAGIC_LINK_SECRET=MAGIC_LINK_SECRET:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,ADMIN_API_KEY=ADMIN_API_KEY:latest,CALCOM_WEBHOOK_SECRET=CALCOM_WEBHOOK_SECRET:latest \
-          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001,API_BASE_URL=https://api.conversionops.in,APP_URL=https://app.conversionops.in \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-2.0-flash-001,API_BASE_URL=https://api.conversionops.in,APP_URL=https://app.conversionops.in \
           --tag=commit-$SHORT_SHA \
           --revision-suffix=$SHORT_SHA
         echo "API deployed successfully"
@@ -224,7 +224,7 @@ steps:
           --subnet=default \
           --vpc-egress=private-ranges-only \
           --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest \
-          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-1.5-flash-001 \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_AI_MODEL=gemini-2.0-flash-001 \
           --revision-suffix=$SHORT_SHA
         echo "Worker deployed successfully"
     waitFor: ['smoke-test']

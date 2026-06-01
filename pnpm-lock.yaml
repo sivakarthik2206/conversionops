@@ -422,9 +422,9 @@ importers:
       '@conversionops/types':
         specifier: workspace:*
         version: link:../types
-      '@google-cloud/vertexai':
+      '@google/genai':
         specifier: ^1.0.0
-        version: 1.12.0
+        version: 1.52.0
       xstate:
         specifier: ^5.0.0
         version: 5.31.1

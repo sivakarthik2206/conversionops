@@ -1,5 +1,4 @@
-import { VertexAI } from '@google-cloud/vertexai';
-import type { GenerativeModel } from '@google-cloud/vertexai';
+import { GoogleGenAI } from '@google/genai';
 import { ExternalServiceError } from '@conversionops/sdk-standards';
 import type { Result } from '@conversionops/types';
 
@@ -19,14 +18,25 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1024;
 const GENERATE_TIMEOUT_MS = 30_000;
 
-// Circuit breaker: open after 5 consecutive failures, reset after 60s
 const CIRCUIT_FAILURE_THRESHOLD = 5;
 const CIRCUIT_RESET_MS = 60_000;
 
 type CircuitState = 'closed' | 'open' | 'half-open';
 
+// Minimal type shapes we care about from @google/genai response
+interface GcpPart { text?: string }
+interface GcpContent { parts?: GcpPart[] }
+interface GcpCandidate { content?: GcpContent; finishReason?: string }
+interface GcpUsage { promptTokenCount?: number; candidatesTokenCount?: number }
+interface GcpResponse {
+  candidates?: GcpCandidate[];
+  usageMetadata?: GcpUsage;
+  promptFeedback?: { blockReason?: string };
+  text?: string;
+}
+
 export class VertexAIClient {
-  private readonly model: GenerativeModel | null;
+  private readonly ai: GoogleGenAI | null;
   private readonly modelId: string;
 
   private circuitState: CircuitState = 'closed';
@@ -35,22 +45,15 @@ export class VertexAIClient {
 
   constructor() {
     const project = process.env['GOOGLE_CLOUD_PROJECT'];
-    const location = process.env['VERTEX_AI_LOCATION'] ?? 'us-central1';
-    this.modelId = process.env['VERTEX_AI_MODEL'] ?? 'gemini-1.5-flash-001';
+    const location = process.env['GOOGLE_CLOUD_REGION'] ?? process.env['VERTEX_AI_LOCATION'] ?? 'us-central1';
+    this.modelId = process.env['VERTEX_AI_MODEL'] ?? 'gemini-2.0-flash-001';
 
     if (!project) {
-      this.model = null;
+      this.ai = null;
       return;
     }
 
-    const vertexAI = new VertexAI({ project, location });
-    this.model = vertexAI.getGenerativeModel({
-      model: this.modelId,
-      generationConfig: {
-        maxOutputTokens: DEFAULT_MAX_TOKENS,
-        temperature: DEFAULT_TEMPERATURE,
-      },
-    });
+    this.ai = new GoogleGenAI({ project, location });
   }
 
   private checkCircuit(): Result<void> {
@@ -68,7 +71,6 @@ export class VertexAIClient {
       };
     }
 
-    // half-open: allow one probe
     return { ok: true, value: undefined };
   }
 
@@ -86,17 +88,12 @@ export class VertexAIClient {
     }
   }
 
-  /**
-   * Generates a response from Gemini. Wraps all errors — never throws.
-   * Includes circuit breaker, content filtering, and 30s timeout.
-   * @returns Result<GenerateResponse>
-   */
   async generate(
     systemPrompt: string,
     userPrompt: string,
     options: GenerateOptions = {},
   ): Promise<Result<GenerateResponse>> {
-    if (!this.model) {
+    if (!this.ai) {
       return { ok: false, error: new ExternalServiceError('vertex-ai', 'GOOGLE_CLOUD_PROJECT not configured') };
     }
 
@@ -110,11 +107,12 @@ export class VertexAIClient {
     );
 
     try {
-      const result = await Promise.race([
-        this.model.generateContent({
-          systemInstruction: systemPrompt,
+      const rawResult = await Promise.race([
+        this.ai.models.generateContent({
+          model: this.modelId,
           contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-          generationConfig: {
+          config: {
+            systemInstruction: systemPrompt,
             maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_TOKENS,
             temperature: options.temperature ?? DEFAULT_TEMPERATURE,
           },
@@ -122,12 +120,11 @@ export class VertexAIClient {
         timeoutPromise,
       ]);
 
-      const response = result.response;
-      const candidate = response.candidates?.[0];
+      const result = rawResult as GcpResponse;
+      const candidate = result.candidates?.[0];
 
       if (!candidate) {
-        if (response.promptFeedback?.blockReason) {
-          // Content filtered — not a circuit-breaker failure
+        if (result.promptFeedback?.blockReason) {
           return {
             ok: false,
             error: new ExternalServiceError('vertex-ai', 'CONTENT_FILTERED'),
@@ -140,17 +137,19 @@ export class VertexAIClient {
         };
       }
 
-      const content = candidate.content.parts
-        .filter((p): p is { text: string } => 'text' in p && typeof p.text === 'string')
-        .map((p) => p.text)
-        .join('');
+      // @google/genai provides a convenience .text accessor on the response
+      const content = typeof result.text === 'string'
+        ? result.text
+        : (candidate.content?.parts ?? [])
+            .map((p) => p.text ?? '')
+            .join('');
 
       if (!content.trim()) {
         this.recordFailure();
         return { ok: false, error: new ExternalServiceError('vertex-ai', 'Empty content in response') };
       }
 
-      const usage = response.usageMetadata;
+      const usage = result.usageMetadata;
       const latencyMs = Date.now() - startMs;
 
       this.recordSuccess();
@@ -175,7 +174,6 @@ export class VertexAIClient {
       }
 
       if (errMessage.includes('RESOURCE_EXHAUSTED') || errMessage.includes('quota')) {
-        // Quota exhaustion — open circuit immediately
         this.circuitFailures = CIRCUIT_FAILURE_THRESHOLD;
         this.recordFailure();
         return {
@@ -192,11 +190,6 @@ export class VertexAIClient {
     }
   }
 
-  /**
-   * Generates with exponential backoff — 3 attempts (1s, 2s, 4s).
-   * Skips retry for content filtering and quota exhaustion (non-retryable).
-   * @returns Result<GenerateResponse>
-   */
   async generateWithRetry(
     systemPrompt: string,
     userPrompt: string,
@@ -227,7 +220,6 @@ export class VertexAIClient {
     return this.modelId;
   }
 
-  /** Returns current circuit breaker state — for health endpoint / monitoring. */
   getCircuitState(): { state: CircuitState; failures: number } {
     return { state: this.circuitState, failures: this.circuitFailures };
   }

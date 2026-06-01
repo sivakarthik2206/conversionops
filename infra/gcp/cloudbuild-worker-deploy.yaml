@@ -1,0 +1,30 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Deploying Worker..."
+        gcloud run deploy conversionops-worker \
+          --image=us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker:latest \
+          --region=us-central1 \
+          --platform=managed \
+          --service-account=conversionops-worker@conversionops-prod.iam.gserviceaccount.com \
+          --no-allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=5 \
+          --concurrency=1 \
+          --cpu=2 \
+          --memory=1Gi \
+          --timeout=300 \
+          --no-cpu-throttling \
+          --add-cloudsql-instances=conversionops-prod:us-central1:conversionops-db \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=conversionops-prod,VERTEX_AI_MODEL=gemini-2.0-flash-001,GOOGLE_CLOUD_REGION=us-central1,LOG_LEVEL=info,WORKER_CONCURRENCY=5
+        echo "Worker deployed successfully"
+options:
+  logging: CLOUD_LOGGING_ONLY
