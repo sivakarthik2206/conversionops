@@ -32,3 +32,6 @@ coverage
 
 # Prisma
 packages/db/prisma/migrations/*.sql
+
+.vercel
+.env*.local

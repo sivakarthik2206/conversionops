@@ -1,0 +1,94 @@
+steps:
+  ###############################################################################
+  # 1. DEPLOY API
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: deploy-api
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Deploying API revision $_COMMIT_SHA..."
+        gcloud run deploy conversionops-api \
+          --image=us-central1-docker.pkg.dev/conversionops-prod/conversionops/api:$_COMMIT_SHA \
+          --region=us-central1 \
+          --platform=managed \
+          --service-account=conversionops-api@conversionops-prod.iam.gserviceaccount.com \
+          --allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=10 \
+          --concurrency=80 \
+          --cpu=1 \
+          --memory=512Mi \
+          --timeout=60 \
+          --no-cpu-throttling \
+          --add-cloudsql-instances=conversionops-prod:us-central1:conversionops-db \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,MAGIC_LINK_SECRET=MAGIC_LINK_SECRET:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,ADMIN_API_KEY=ADMIN_API_KEY:latest,CALCOM_WEBHOOK_SECRET=CALCOM_WEBHOOK_SECRET:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=conversionops-prod,VERTEX_AI_MODEL=gemini-2.0-flash-001,API_BASE_URL=https://api.conversionops.in,APP_URL=https://app.conversionops.in \
+          --revision-suffix=$_SHORT_SHA
+        echo "API deployed successfully"
+
+  ###############################################################################
+  # 2. SMOKE TEST
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: smoke-test
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Waiting 15s for API to stabilize..."
+        sleep 15
+        API_URL=$$(gcloud run services describe conversionops-api --region=us-central1 --format='value(status.url)')
+        echo "Testing $$API_URL/v1/health..."
+        RESPONSE=$$(curl -sf --max-time 15 "$$API_URL/v1/health" 2>&1)
+        echo "Response: $$RESPONSE"
+        if echo "$$RESPONSE" | grep -q '"status":"healthy"'; then
+          echo "Health check PASSED"
+        else
+          echo "Health check FAILED: $$RESPONSE"
+          exit 1
+        fi
+    waitFor: ['deploy-api']
+
+  ###############################################################################
+  # 3. DEPLOY WORKER
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: deploy-worker
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Deploying Worker revision $_COMMIT_SHA..."
+        gcloud run deploy conversionops-worker \
+          --image=us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker:$_COMMIT_SHA \
+          --region=us-central1 \
+          --platform=managed \
+          --service-account=conversionops-worker@conversionops-prod.iam.gserviceaccount.com \
+          --no-allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=5 \
+          --concurrency=1 \
+          --cpu=2 \
+          --memory=1Gi \
+          --timeout=300 \
+          --no-cpu-throttling \
+          --add-cloudsql-instances=conversionops-prod:us-central1:conversionops-db \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=conversionops-prod,VERTEX_AI_MODEL=gemini-2.0-flash-001,GOOGLE_CLOUD_REGION=us-central1,LOG_LEVEL=info,WORKER_CONCURRENCY=5 \
+          --revision-suffix=$_SHORT_SHA
+        echo "Worker deployed successfully"
+    waitFor: ['smoke-test']
+
+options:
+  logging: CLOUD_LOGGING_ONLY
