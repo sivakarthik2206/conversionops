@@ -53,7 +53,7 @@ export class VertexAIClient {
       return;
     }
 
-    this.ai = new GoogleGenAI({ project, location });
+    this.ai = new GoogleGenAI({ vertexai: true, project, location });
   }
 
   private checkCircuit(): Result<void> {
