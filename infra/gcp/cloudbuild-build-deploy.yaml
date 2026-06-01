@@ -1,0 +1,169 @@
+################################################################################
+# ConversionOps — Build and Deploy (no test step)
+# Use when tests cannot run (no Postgres/Redis sidecars in Cloud Build)
+################################################################################
+
+steps:
+  ###############################################################################
+  # 1. Build Docker images in parallel
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build-api
+    args:
+      - 'build'
+      - '--cache-from=us-central1-docker.pkg.dev/conversionops-prod/conversionops/api:latest'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/conversionops-prod/conversionops/api:$COMMIT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/conversionops-prod/conversionops/api:latest'
+      - '-f'
+      - 'apps/api/Dockerfile'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build-worker
+    args:
+      - 'build'
+      - '--cache-from=us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker:latest'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker:$COMMIT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker:latest'
+      - '-f'
+      - 'apps/worker/Dockerfile'
+      - '.'
+
+  ###############################################################################
+  # 2. Push images in parallel
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-api
+    args: ['push', '--all-tags', 'us-central1-docker.pkg.dev/conversionops-prod/conversionops/api']
+    waitFor: ['build-api']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-worker
+    args: ['push', '--all-tags', 'us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker']
+    waitFor: ['build-worker']
+
+  ###############################################################################
+  # 3. Database migration
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: migrate
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "Downloading Cloud SQL Proxy..."
+        wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.1/cloud-sql-proxy.linux.amd64 -O cloud-sql-proxy
+        chmod +x cloud-sql-proxy
+        mkdir -p /cloudsql
+        ./cloud-sql-proxy --unix-socket /cloudsql conversionops-prod:us-central1:conversionops-db &
+        PROXY_PID=$$!
+        sleep 5
+        npm install -g pnpm@9 --quiet
+        DATABASE_URL="$$DATABASE_URL" pnpm --filter @conversionops/db exec prisma migrate deploy
+        kill $$PROXY_PID 2>/dev/null || true
+        echo "Migration complete"
+    waitFor: ['push-api', 'push-worker']
+    secretEnv: ['DATABASE_URL']
+
+  ###############################################################################
+  # 4. Deploy API
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: deploy-api
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        gcloud run deploy conversionops-api \
+          --image=us-central1-docker.pkg.dev/conversionops-prod/conversionops/api:$COMMIT_SHA \
+          --region=us-central1 \
+          --platform=managed \
+          --service-account=conversionops-api@conversionops-prod.iam.gserviceaccount.com \
+          --allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=10 \
+          --concurrency=80 \
+          --cpu=1 \
+          --memory=512Mi \
+          --timeout=60 \
+          --no-cpu-throttling \
+          --add-cloudsql-instances=conversionops-prod:us-central1:conversionops-db \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,MAGIC_LINK_SECRET=MAGIC_LINK_SECRET:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,ADMIN_API_KEY=ADMIN_API_KEY:latest,CALCOM_WEBHOOK_SECRET=CALCOM_WEBHOOK_SECRET:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=conversionops-prod,VERTEX_AI_MODEL=gemini-2.0-flash-001,API_BASE_URL=https://api.conversionops.in,APP_URL=https://app.conversionops.in \
+          --revision-suffix=$SHORT_SHA
+        echo "API deployed"
+    waitFor: ['migrate']
+
+  ###############################################################################
+  # 5. Smoke test
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: smoke-test
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        sleep 15
+        API_URL=$$(gcloud run services describe conversionops-api --region=us-central1 --format='value(status.url)')
+        RESPONSE=$$(curl -sf --max-time 15 "$$API_URL/v1/health" 2>&1)
+        echo "Health: $$RESPONSE"
+        if echo "$$RESPONSE" | grep -q '"status":"healthy"'; then
+          echo "PASSED"
+        else
+          echo "FAILED: $$RESPONSE"
+          exit 1
+        fi
+    waitFor: ['deploy-api']
+
+  ###############################################################################
+  # 6. Deploy Worker
+  ###############################################################################
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: deploy-worker
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        set -e
+        gcloud run deploy conversionops-worker \
+          --image=us-central1-docker.pkg.dev/conversionops-prod/conversionops/worker:$COMMIT_SHA \
+          --region=us-central1 \
+          --platform=managed \
+          --service-account=conversionops-worker@conversionops-prod.iam.gserviceaccount.com \
+          --no-allow-unauthenticated \
+          --min-instances=1 \
+          --max-instances=5 \
+          --concurrency=1 \
+          --cpu=2 \
+          --memory=1Gi \
+          --timeout=300 \
+          --no-cpu-throttling \
+          --add-cloudsql-instances=conversionops-prod:us-central1:conversionops-db \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=private-ranges-only \
+          --set-secrets=DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,RESEND_API_KEY=RESEND_API_KEY:latest,CALCOM_API_KEY=CALCOM_API_KEY:latest \
+          --set-env-vars=NODE_ENV=production,GOOGLE_CLOUD_PROJECT=conversionops-prod,VERTEX_AI_MODEL=gemini-2.0-flash-001,GOOGLE_CLOUD_REGION=us-central1,LOG_LEVEL=info,WORKER_CONCURRENCY=5 \
+          --revision-suffix=$SHORT_SHA
+        echo "Worker deployed"
+    waitFor: ['smoke-test']
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/conversionops-prod/secrets/DATABASE_URL/versions/latest
+      env: DATABASE_URL
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+  substitutionOption: ALLOW_LOOSE
