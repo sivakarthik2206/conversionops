@@ -134,7 +134,7 @@ export default function DemoPage() {
           </Reveal>
           <Reveal delay={2}>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <a href="https://calendar.app.google/qJw5n9evBZ8ciiuV9" target="_blank" rel="noopener noreferrer" className="btn-primary">
+              <a href="https://cal.com/siva-karthik-angarayan/conversionops-demo" target="_blank" rel="noopener noreferrer" className="btn-primary">
                 Schedule
                 <Icon name="arrow-right" size={14} stroke={2.2} />
               </a>

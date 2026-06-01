@@ -159,7 +159,7 @@ export default function Navbar() {
               Sign in
             </Link>
             <a
-              href="https://calendar.app.google/qJw5n9evBZ8ciiuV9"
+              href="https://cal.com/siva-karthik-angarayan/conversionops-demo"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -296,7 +296,7 @@ export default function Navbar() {
             Sign in
           </Link>
           <a
-            href="https://calendar.app.google/qJw5n9evBZ8ciiuV9"
+            href="https://cal.com/siva-karthik-angarayan/conversionops-demo"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setMenuOpen(false)}

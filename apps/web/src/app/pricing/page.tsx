@@ -176,7 +176,7 @@ export default function PricingPage() {
                 Book a 20-min call &mdash; we&apos;ll show the platform live with your numbers.
               </p>
             </div>
-            <a href="https://calendar.app.google/qJw5n9evBZ8ciiuV9" target="_blank" rel="noopener noreferrer" className="btn-primary">
+            <a href="https://cal.com/siva-karthik-angarayan/conversionops-demo" target="_blank" rel="noopener noreferrer" className="btn-primary">
               Schedule
               <Icon name="arrow-right" size={14} stroke={2.2} />
             </a>

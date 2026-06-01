@@ -239,7 +239,7 @@ export default function Hero() {
             className="animate-fade-up delay-300"
             style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
           >
-            <a href="https://calendar.app.google/qJw5n9evBZ8ciiuV9" target="_blank" rel="noopener noreferrer" className="btn-primary">
+            <a href="https://cal.com/siva-karthik-angarayan/conversionops-demo" target="_blank" rel="noopener noreferrer" className="btn-primary">
               Schedule
               <Icon name="arrow-right" size={16} stroke={2.2} />
             </a>
