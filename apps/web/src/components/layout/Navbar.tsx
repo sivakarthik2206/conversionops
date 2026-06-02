@@ -159,7 +159,7 @@ export default function Navbar() {
               Sign in
             </Link>
             <a
-              href="https://cal.com/siva-karthik-angarayan/conversionops-demo"
+              href="https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -296,7 +296,7 @@ export default function Navbar() {
             Sign in
           </Link>
           <a
-            href="https://cal.com/siva-karthik-angarayan/conversionops-demo"
+            href="https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setMenuOpen(false)}

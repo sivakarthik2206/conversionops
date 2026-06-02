@@ -38,7 +38,7 @@ const PLANS: Plan[] = [
       'Email support',
     ],
     cta: 'Schedule',
-    ctaHref: 'https://cal.com/siva-karthik-angarayan/conversionops-demo',
+    ctaHref: 'https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo',
     featured: false,
   },
   {
@@ -58,7 +58,7 @@ const PLANS: Plan[] = [
       'Priority support · 4-hr SLA',
     ],
     cta: 'Schedule',
-    ctaHref: 'https://cal.com/siva-karthik-angarayan/conversionops-demo',
+    ctaHref: 'https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo',
     featured: true,
   },
   {
@@ -78,7 +78,7 @@ const PLANS: Plan[] = [
       'Single sign-on (SAML)',
     ],
     cta: 'Schedule',
-    ctaHref: 'https://cal.com/siva-karthik-angarayan/conversionops-demo',
+    ctaHref: 'https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo',
     featured: false,
   },
 ];

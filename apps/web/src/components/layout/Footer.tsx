@@ -9,14 +9,14 @@ const COLUMNS = [
       { label: 'Features',    href: '/#features',                                         external: false },
       { label: 'Live demo',   href: '/#demo',                                             external: false },
       { label: 'Pricing',     href: '/pricing',                                           external: false },
-      { label: 'Schedule',    href: 'https://cal.com/siva-karthik-angarayan/conversionops-demo',     external: true  },
+      { label: 'Schedule',    href: 'https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo',     external: true  },
     ],
   },
   {
     title: 'Company',
     items: [
-      { label: 'Book a demo',  href: 'https://cal.com/siva-karthik-angarayan/conversionops-demo',   external: true  },
-      { label: 'Contact us',   href: 'https://cal.com/siva-karthik-angarayan/conversionops-demo',   external: true  },
+      { label: 'Book a demo',  href: 'https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo',   external: true  },
+      { label: 'Contact us',   href: 'https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo',   external: true  },
       { label: 'Sign in',      href: 'https://app.conversionops.in/login',               external: false },
     ],
   },

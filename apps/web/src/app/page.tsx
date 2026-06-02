@@ -115,7 +115,7 @@ function FinalCTA() {
 
         <Reveal delay={3}>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a href="https://cal.com/siva-karthik-angarayan/conversionops-demo" target="_blank" rel="noopener noreferrer" className="btn-primary">
+            <a href="https://cal.com/siva-karthik-angarayan-olmzzm/conversionops-demo" target="_blank" rel="noopener noreferrer" className="btn-primary">
               Schedule
               <Icon name="arrow-right" size={16} stroke={2.2} />
             </a>
