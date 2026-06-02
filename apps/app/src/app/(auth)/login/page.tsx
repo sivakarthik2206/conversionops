@@ -23,8 +23,9 @@ export default function LoginPage() {
     try {
       await apiClient.post('/auth/magic-link', { email });
       setSent(true);
-    } catch {
-      addToast('Something went wrong. Please try again.', 'error');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      addToast(msg, 'error');
     } finally {
       setLoading(false);
     }

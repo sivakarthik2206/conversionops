@@ -18,7 +18,7 @@ export class ResendClient {
   private readonly resend: Resend;
   private readonly fromAddress: string;
 
-  constructor(apiKey: string, fromAddress = 'ConversionOps <noreply@conversionops.in>') {
+  constructor(apiKey: string, fromAddress = 'ConversionOps <hello@conversionops.in>') {
     this.resend = new Resend(apiKey || 'placeholder_not_configured');
     this.fromAddress = fromAddress;
   }
@@ -36,7 +36,7 @@ export class ResendClient {
     appUrl: string,
     workspaceName = 'Your workspace',
   ): Promise<Result<void>> {
-    const link = `${appUrl}/auth/verify?token=${encodeURIComponent(token)}`;
+    const link = `${appUrl}/verify?token=${encodeURIComponent(token)}`;
     try {
       const { error } = await this.resend.emails.send({
         from: this.fromAddress,

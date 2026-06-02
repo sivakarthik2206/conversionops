@@ -24,9 +24,15 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/user.dec
 import { CurrentWorkspace, AuthenticatedWorkspace } from '../../common/decorators/workspace.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
+const E164_RE = /^\+[1-9]\d{10,14}$/;
+
 const UpdateWorkspaceSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   timezone: z.string().optional(),
+  twilioNumber: z.string().regex(E164_RE, 'Must be E.164 format, e.g. +19125550550').optional(),
+  followUpBossApiKey: z.string().max(256).optional(),
+  calComUsername: z.string().max(128).optional(),
+  calComLink: z.string().max(512).optional(),
 });
 
 const UpdateAiConfigSchema = z.object({
@@ -38,6 +44,7 @@ const PauseAISchema = z.object({
 });
 
 type UpdateWorkspaceDto = z.infer<typeof UpdateWorkspaceSchema>;
+
 type UpdateAiConfigDto = z.infer<typeof UpdateAiConfigSchema>;
 type PauseAIDto = z.infer<typeof PauseAISchema>;
 
@@ -67,7 +74,14 @@ export class WorkspaceController {
     @Body(new ZodValidationPipe(UpdateWorkspaceSchema)) dto: UpdateWorkspaceDto,
   ): Promise<WorkspaceDto> {
     const result = await this.workspaceService.updateWorkspace(
-      new UpdateWorkspaceCommand(workspace.id, user.id, dto),
+      new UpdateWorkspaceCommand(workspace.id, user.id, {
+        name: dto.name,
+        timezone: dto.timezone,
+        twilioNumber: dto.twilioNumber,
+        followUpBossApiKey: dto.followUpBossApiKey,
+        calComUsername: dto.calComUsername,
+        calComLink: dto.calComLink,
+      }),
     );
     if (!result.ok) throw new UnprocessableEntityException(result.error.message);
     return this.workspaceService.getWorkspace(workspace.id).then((r) => {

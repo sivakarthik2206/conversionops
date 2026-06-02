@@ -18,6 +18,8 @@ export interface WorkspaceDto {
   ownerEmail: string;
   createdAt: Date;
   updatedAt: Date;
+  twilioNumber: string | null;
+  aiConfig: Record<string, unknown>;
 }
 
 export interface WorkspaceHealthDto {

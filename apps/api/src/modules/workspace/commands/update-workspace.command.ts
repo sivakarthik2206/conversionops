@@ -6,6 +6,10 @@ export class UpdateWorkspaceCommand {
       name?: string;
       timezone?: string;
       aiConfig?: Record<string, unknown>;
+      twilioNumber?: string;
+      followUpBossApiKey?: string;
+      calComUsername?: string;
+      calComLink?: string;
     },
   ) {}
 }

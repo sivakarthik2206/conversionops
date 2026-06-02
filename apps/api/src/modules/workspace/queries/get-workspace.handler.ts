@@ -48,6 +48,8 @@ export class GetWorkspaceHandler {
           ownerEmail: workspace.ownerEmail,
           createdAt: workspace.createdAt,
           updatedAt: workspace.updatedAt,
+          twilioNumber: workspace.twilioNumber ?? null,
+          aiConfig: (workspace.aiConfig as Record<string, unknown>) ?? {},
         },
       };
     } catch (error) {
