@@ -1,71 +1,68 @@
-import { createHmac, randomBytes } from 'crypto';
-import { Result } from '@conversionops/types';
+import * as crypto from 'crypto';
+import { ok, err } from '@conversionops/types';
+import type { Result } from '@conversionops/types';
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
-function buildPayload(email: string, expiresAt: number, nonce: string): string {
-  return `${email}:${expiresAt}:${nonce}`;
-}
-
-function hmacSign(payload: string, secret: string): string {
-  return createHmac('sha256', secret).update(payload).digest('hex');
-}
-
-/**
- * Generates a time-limited HMAC magic-link token for the given email.
- * @param email - Recipient email address
- * @param secret - HMAC secret from MAGIC_LINK_SECRET env var
- * @returns Opaque token to embed in the magic link URL
- */
 export function generateMagicLinkToken(email: string, secret: string): string {
-  const expiresAt = Date.now() + TOKEN_TTL_MS;
-  const nonce = randomBytes(16).toString('hex');
-  const payload = buildPayload(email, expiresAt, nonce);
-  const signature = hmacSign(payload, secret);
-  const raw = `${payload}:${signature}`;
-  return Buffer.from(raw).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    email: email.toLowerCase().trim(),
+    exp: Date.now() + TOKEN_TTL_MS,
+    iat: Date.now(),
+    nonce: crypto.randomBytes(16).toString('hex'),
+  })).toString('base64url');
+
+  const sig = crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('base64url');
+
+  return `${payload}.${sig}`;
 }
 
-/**
- * Verifies a magic-link token and returns the embedded email if valid.
- * @param token - Token received from the magic link URL
- * @param secret - HMAC secret from MAGIC_LINK_SECRET env var
- * @returns Result<{ email: string }> — never throws
- */
-export function verifyMagicLinkToken(token: string, secret: string): Result<{ email: string }> {
+export function verifyMagicLinkToken(
+  token: string,
+  secret: string,
+): Result<{ email: string }> {
   try {
-    const raw = Buffer.from(token, 'base64url').toString('utf-8');
-    const parts = raw.split(':');
-    if (parts.length !== 4) {
-      return { ok: false, error: new Error('Invalid token format') };
+    const parts = token.split('.');
+    if (parts.length !== 2) {
+      return err(new Error('Invalid token format'));
     }
 
-    const [email, expiresAtStr, nonce, signature] = parts as [string, string, string, string];
-    const expiresAt = parseInt(expiresAtStr, 10);
+    const [payload, sig] = parts as [string, string];
 
-    if (isNaN(expiresAt) || Date.now() > expiresAt) {
-      return { ok: false, error: new Error('Token expired') };
+    const expectedSig = crypto
+      .createHmac('sha256', secret)
+      .update(payload)
+      .digest('base64url');
+
+    const sigBuffer = Buffer.from(sig, 'base64url');
+    const expectedBuffer = Buffer.from(expectedSig, 'base64url');
+
+    if (sigBuffer.length !== expectedBuffer.length) {
+      return err(new Error('Invalid token signature'));
     }
 
-    const payload = buildPayload(email, expiresAt, nonce);
-    const expectedSignature = hmacSign(payload, secret);
-
-    // Constant-time comparison to prevent timing attacks
-    if (signature.length !== expectedSignature.length) {
-      return { ok: false, error: new Error('Invalid token signature') };
+    if (!crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      return err(new Error('Invalid token signature'));
     }
 
-    let mismatch = 0;
-    for (let i = 0; i < signature.length; i++) {
-      mismatch |= signature.charCodeAt(i) ^ expectedSignature.charCodeAt(i);
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      email?: string;
+      exp?: number;
+    };
+
+    if (!data.exp || Date.now() > data.exp) {
+      return err(new Error('Token expired'));
     }
 
-    if (mismatch !== 0) {
-      return { ok: false, error: new Error('Invalid token signature') };
+    if (!data.email) {
+      return err(new Error('Invalid token payload'));
     }
 
-    return { ok: true, value: { email } };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+    return ok({ email: data.email });
+  } catch (e) {
+    return err(new Error(`Token parse error: ${e instanceof Error ? e.message : String(e)}`));
   }
 }

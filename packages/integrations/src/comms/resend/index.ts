@@ -24,19 +24,16 @@ export class ResendClient {
   }
 
   /**
-   * Sends a magic-link login email. Link expires in 15 minutes (enforced server-side).
+   * Sends a magic-link login email.
    * @param to - Recipient email
-   * @param token - The magic-link token to embed in the URL
-   * @param appUrl - Base URL of the dashboard app
+   * @param link - The fully-built magic-link URL (including token)
    * @param workspaceName - Optional workspace name for personalization
    */
   async sendMagicLink(
     to: string,
-    token: string,
-    appUrl: string,
+    link: string,
     workspaceName = 'Your workspace',
   ): Promise<Result<void>> {
-    const link = `${appUrl}/verify?token=${encodeURIComponent(token)}`;
     try {
       const { error } = await this.resend.emails.send({
         from: this.fromAddress,

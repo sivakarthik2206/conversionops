@@ -35,3 +35,6 @@ packages/db/prisma/migrations/*.sql
 
 .vercel
 .env*.local
+
+# Local binaries
+*.exe
