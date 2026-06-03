@@ -31,7 +31,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       }
 
       const where = (args as Record<string, unknown>)?.where as Record<string, unknown> | undefined;
-      const hasWorkspaceScope = where?.workspaceId !== undefined;
+      const data = (args as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+      // create/upsert ops have workspaceId in data not where
+      const hasWorkspaceScope = where?.workspaceId !== undefined || data?.workspaceId !== undefined;
 
       if (SCOPED_WRITE_ACTIONS.has(action) && !hasWorkspaceScope) {
         // Hard fail on unscoped writes — this is a critical security invariant
