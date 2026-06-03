@@ -44,7 +44,7 @@ export class AuthController {
     const result = await this.authService.verifyMagicLink(body.token, body.workspaceSlug);
     if (!result.ok) throw new UnauthorizedException('Invalid or expired login link');
     return {
-      token: result.value.jwt,
+      jwt: result.value.jwt,
       user: result.value.user,
     };
   }
