@@ -59,7 +59,10 @@ export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning
   const aiLabel = aiStatus === 'active' ? 'AI Active' : aiStatus === 'warning' ? 'Quota warning' : 'AI Paused';
 
   const signOut = () => {
-    if (typeof window !== 'undefined') localStorage.removeItem('auth_token');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('co_token');
+      document.cookie = 'co_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    }
     router.push('/login');
   };
 

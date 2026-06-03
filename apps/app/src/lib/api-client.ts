@@ -20,7 +20,7 @@ export class ApiClientError extends Error {
 
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth_token');
+  return localStorage.getItem('co_token');
 }
 
 function buildHeaders(extra?: Record<string, string>): HeadersInit {
@@ -36,9 +36,14 @@ function buildHeaders(extra?: Record<string, string>): HeadersInit {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (res.status === 401) {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-      document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-      window.location.href = '/login';
+      const hadToken = !!localStorage.getItem('co_token');
+      localStorage.removeItem('co_token');
+      document.cookie = 'co_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      // Only redirect if there was actually a token (expired) or no token at all.
+      // Either way, session is invalid — send to login.
+      if (hadToken || !localStorage.getItem('co_token')) {
+        window.location.href = '/login';
+      }
     }
     throw new ApiClientError(401, 'UNAUTHORIZED', 'Session expired');
   }

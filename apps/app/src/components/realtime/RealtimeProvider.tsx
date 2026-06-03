@@ -292,7 +292,7 @@ export function RealtimeProvider({ children, workspaceId }: { children: React.Re
   }, []);
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('co_token') : null;
     if (!token) {
       setConnectionState('disconnected');
       return;

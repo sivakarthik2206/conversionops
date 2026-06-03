@@ -16,7 +16,7 @@ const PUBLIC_PATHS = [
 
 /**
  * Next.js Edge middleware for route protection.
- * Dashboard routes require a valid auth_token cookie.
+ * Dashboard routes require a valid co_token cookie.
  * Token validation is done server-side in the API; this guard
  * only prevents unauthenticated users from reaching the RSC layer.
  */

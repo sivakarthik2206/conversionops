@@ -35,7 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : false;
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('auth_token')) {
+    if (typeof window !== 'undefined' && !localStorage.getItem('co_token')) {
       router.replace('/login');
     }
   }, [router]);
