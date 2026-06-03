@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'crypto';
 import { Result } from '@conversionops/types';
 
-const TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const TOKEN_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
 function buildPayload(email: string, expiresAt: number, nonce: string): string {
   return `${email}:${expiresAt}:${nonce}`;

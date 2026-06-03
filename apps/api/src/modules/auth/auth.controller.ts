@@ -42,7 +42,13 @@ export class AuthController {
     @Body(new ZodValidationPipe(VerifySchema)) body: z.infer<typeof VerifySchema>,
   ) {
     const result = await this.authService.verifyMagicLink(body.token, body.workspaceSlug);
-    if (!result.ok) throw new UnauthorizedException('Invalid or expired login link');
+    if (!result.ok) {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        error: 'INVALID_TOKEN',
+        message: result.error.message,
+      });
+    }
     return {
       jwt: result.value.jwt,
       user: result.value.user,

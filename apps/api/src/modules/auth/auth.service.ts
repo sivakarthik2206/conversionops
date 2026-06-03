@@ -51,7 +51,10 @@ export class AuthService {
 
     const verifyResult = verifyMagicLinkToken(token, secret);
     if (!verifyResult.ok) {
-      logger.warn({ err: verifyResult.error }, 'Magic link verification failed');
+      logger.error(
+        { reason: verifyResult.error.message, tokenLength: token.length },
+        'Magic link verification failed',
+      );
       return { ok: false, error: verifyResult.error };
     }
 
