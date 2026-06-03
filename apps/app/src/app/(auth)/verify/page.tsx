@@ -1,9 +1,7 @@
 'use client';
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { apiClient } from '@/lib/api-client';
-import { Icon } from '@/components/Icon';
 
 function VerifyContent() {
   const router = useRouter();
@@ -11,12 +9,12 @@ function VerifyContent() {
   const token = searchParams.get('token');
 
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('Magic links can only be used once and expire after 15 minutes.');
 
   useEffect(() => {
     if (!token) {
-      setStatus('error');
       setErrorMessage('No login token found. Please request a new magic link.');
+      setStatus('error');
       return;
     }
 
@@ -24,7 +22,7 @@ function VerifyContent() {
       try {
         const data = await apiClient.post<{ token?: string; jwt?: string; user: { email: string } }>('/auth/verify', { token });
         const jwt = data.jwt ?? data.token ?? '';
-        if (!jwt) { setStatus('error'); setErrorMessage('Invalid response from server.'); return; }
+        if (!jwt) { setErrorMessage('Invalid response from server.'); setStatus('error'); return; }
         if (typeof window !== 'undefined') {
           localStorage.setItem('auth_token', jwt);
           const maxAge = 7 * 24 * 60 * 60;
@@ -32,132 +30,128 @@ function VerifyContent() {
           document.cookie = `auth_token=${jwt}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
         }
         setStatus('success');
-        setTimeout(() => router.push('/'), 1200);
+        setTimeout(() => router.push('/'), 1000);
       } catch {
         setStatus('error');
-        setErrorMessage('This link has expired or already been used. Request a new one to continue.');
       }
     })();
   }, [token, router]);
 
-  const config = {
-    verifying: { color: 'var(--accent)', icon: 'loader' as const, title: 'Signing you in', sub: 'Verifying your login link.' },
-    success:   { color: 'var(--green)',  icon: 'check'  as const, title: "You're in", sub: 'Redirecting to your dashboard…' },
-    error:     { color: 'var(--red)',    icon: 'x'      as const, title: 'Link expired', sub: errorMessage },
-  }[status];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="surface-card"
-      style={{
-        width: '100%',
-        maxWidth: 420,
-        padding: 36,
-        textAlign: 'center',
-        boxShadow: 'var(--shadow-xl)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: -60,
-          right: -60,
-          width: 200,
-          height: 200,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${config.color}1f, transparent 70%)`,
-          filter: 'blur(30px)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      <div
-        style={{
-          width: 60,
-          height: 60,
-          borderRadius: '50%',
-          background: `${config.color}14`,
-          border: `1px solid ${config.color}33`,
-          color: config.color,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 20px',
-          position: 'relative',
-        }}
-      >
-        <Icon
-          name={config.icon}
-          size={26}
-          stroke={2.2}
-          style={status === 'verifying' ? { animation: 'spin 1s linear infinite' } : undefined}
-        />
-      </div>
-
-      <h1
-        className="serif"
-        style={{
+  if (status === 'verifying') {
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={{ animation: 'verifySpin 0.9s linear infinite' }}>
+            <circle cx="20" cy="20" r="16" stroke="rgba(232,255,71,0.2)" strokeWidth="3" fill="none" />
+            <path d="M20 4 a16 16 0 0 1 16 16" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" fill="none" />
+          </svg>
+        </div>
+        <h1 style={{
+          fontFamily: "'DM Serif Display', Georgia, serif",
           fontSize: 24,
           color: 'var(--text)',
           margin: '0 0 8px',
           fontWeight: 400,
-          fontStyle: 'italic',
-          fontFamily: "'Instrument Serif', serif",
-          position: 'relative',
+        }}>
+          Signing you in...
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0 }}>Please wait a moment</p>
+      </div>
+    );
+  }
+
+  if (status === 'success') {
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="48" height="48" rx="24" fill="rgba(77,255,165,0.1)" />
+            <path d="M14 24l8 8 12-16" stroke="var(--green)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <h1 style={{
+          fontFamily: "'DM Serif Display', Georgia, serif",
+          fontSize: 28,
+          color: 'var(--text)',
+          margin: '0 0 10px',
+          fontWeight: 400,
+        }}>
+          You&apos;re in!
+        </h1>
+        <p style={{ fontSize: 15, color: 'var(--text-2)', margin: 0 }}>Taking you to your dashboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect width="48" height="48" rx="24" fill="rgba(255,77,77,0.1)" />
+          <path d="M16 16l16 16M32 16L16 32" stroke="var(--red)" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      </div>
+      <h1 style={{
+        fontFamily: "'DM Serif Display', Georgia, serif",
+        fontSize: 24,
+        color: 'var(--text)',
+        margin: '0 0 10px',
+        fontWeight: 400,
+      }}>
+        Link expired or already used
+      </h1>
+      <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 28px', lineHeight: 1.55 }}>
+        {errorMessage}
+      </p>
+      <button
+        onClick={() => router.push('/login')}
+        style={{
+          background: 'var(--accent)',
+          color: '#000',
+          fontWeight: 600,
+          fontSize: 14,
+          padding: '12px 24px',
+          borderRadius: 8,
+          border: 'none',
+          cursor: 'pointer',
         }}
       >
-        {config.title}
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 24px', lineHeight: 1.55, position: 'relative' }}>
-        {config.sub}
-      </p>
-
-      {status === 'error' && (
-        <button onClick={() => router.push('/login')} className="btn-primary" style={{ width: '100%', height: 44, position: 'relative' }}>
-          Request a new link
-        </button>
-      )}
-    </motion.div>
+        Request a new link →
+      </button>
+    </div>
   );
 }
 
 export default function VerifyPage() {
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        background: 'var(--bg)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(232,255,71,0.06) 0%, transparent 65%)',
-          pointerEvents: 'none',
-        }}
-      />
-      <Suspense
-        fallback={
-          <div className="surface-card" style={{ width: '100%', maxWidth: 420, padding: 36, textAlign: 'center' }}>
-            <Icon name="loader" size={26} stroke={2.2} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
-          </div>
-        }
-      >
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      background: 'var(--bg)',
+      position: 'relative',
+    }}>
+      <Suspense fallback={
+        <div style={{ textAlign: 'center' }}>
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={{ animation: 'verifySpin 0.9s linear infinite' }}>
+            <circle cx="20" cy="20" r="16" stroke="rgba(232,255,71,0.2)" strokeWidth="3" fill="none" />
+            <path d="M20 4 a16 16 0 0 1 16 16" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" fill="none" />
+          </svg>
+        </div>
+      }>
         <VerifyContent />
       </Suspense>
+
       <div className="grain" />
+
+      <style>{`
+        @keyframes verifySpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
