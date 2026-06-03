@@ -17,6 +17,7 @@
   "dependencies": {
     "@conversionops/compliance": "workspace:*",
     "@conversionops/db": "workspace:*",
+    "@conversionops/observability": "workspace:*",
     "@conversionops/sdk-standards": "workspace:*",
     "@conversionops/types": "workspace:*",
     "axios": "^1.16.1",

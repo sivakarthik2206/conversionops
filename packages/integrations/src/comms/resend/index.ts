@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { ExternalServiceError } from '@conversionops/sdk-standards';
+import { logger } from '@conversionops/observability';
 import type { Result } from '@conversionops/types';
 
 /**
@@ -32,10 +33,11 @@ export class ResendClient {
   async sendMagicLink(
     to: string,
     link: string,
-    workspaceName = 'Your workspace',
+    workspaceName = 'ConversionOps',
   ): Promise<Result<void>> {
+    logger.info({ to, linkLength: link.length, workspaceName }, 'Sending magic link email');
     try {
-      const { error } = await this.resend.emails.send({
+      const { data, error } = await this.resend.emails.send({
         from: this.fromAddress,
         to,
         subject: 'Your sign-in link for ConversionOps',
@@ -43,7 +45,7 @@ export class ResendClient {
         text:
           `Sign in to ConversionOps\n\n` +
           `Click this link to sign in: ${link}\n\n` +
-          `This link expires in 15 minutes.\n\n` +
+          `This link expires in 60 minutes.\n\n` +
           `If you didn't request this, ignore this email.\n\n` +
           `ConversionOps\nhello@conversionops.in`,
         headers: {
@@ -51,13 +53,16 @@ export class ResendClient {
         },
       });
       if (error) {
-        return { ok: false, error: new ExternalServiceError('Resend', error.message) };
+        logger.error({ error, to }, 'Resend API returned error sending magic link');
+        return { ok: false, error: new ExternalServiceError('Resend', JSON.stringify(error)) };
       }
+      logger.info({ emailId: data?.id, to }, 'Magic link email sent successfully');
       return { ok: true, value: undefined };
-    } catch (error) {
+    } catch (e) {
+      logger.error({ err: e instanceof Error ? e.message : String(e), to }, 'Resend threw exception sending magic link');
       return {
         ok: false,
-        error: new ExternalServiceError('Resend', error instanceof Error ? error.message : String(error)),
+        error: new ExternalServiceError('Resend', e instanceof Error ? e.message : String(e)),
       };
     }
   }

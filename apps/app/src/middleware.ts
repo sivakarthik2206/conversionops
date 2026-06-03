@@ -5,11 +5,13 @@ const PUBLIC_PATHS = [
   '/login',
   '/signup',
   '/verify',
-  '/auth/verify',
+  '/auth',
   '/onboarding',
   '/_next',
   '/favicon',
   '/api/',
+  '/robots.txt',
+  '/sitemap.xml',
 ];
 
 /**
@@ -24,7 +26,7 @@ export function middleware(request: NextRequest): NextResponse {
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   if (isPublic) return NextResponse.next();
 
-  const token = request.cookies.get('auth_token')?.value;
+  const token = request.cookies.get('co_token')?.value;
   if (!token) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
