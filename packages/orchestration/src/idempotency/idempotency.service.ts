@@ -34,9 +34,15 @@ export class IdempotencyService {
     const existing = await this.prisma.idempotencyKey.findUnique({ where: { key } });
 
     if (existing) {
-      if (existing.status === 'COMPLETED') return existing.result;
-
-      if (existing.status === 'PROCESSING') {
+      if (existing.status === 'COMPLETED') {
+        // Expired COMPLETED records are treated as non-existent — allow reprocessing
+        if (existing.expiresAt && existing.expiresAt < new Date()) {
+          await this.prisma.idempotencyKey.delete({ where: { key } }).catch(() => undefined);
+          // Fall through to create a new record below
+        } else {
+          return existing.result;
+        }
+      } else if (existing.status === 'PROCESSING') {
         const ageMs = Date.now() - existing.createdAt.getTime();
         if (ageMs < STALE_PROCESSING_MS) {
           throw new IdempotencyConflictError(key);
@@ -53,9 +59,7 @@ export class IdempotencyService {
           })
           .catch(() => undefined);
         return null;
-      }
-
-      if (existing.status === 'FAILED') {
+      } else if (existing.status === 'FAILED') {
         // Allow retry: delete and fall through to create. If another caller wins
         // the create, we'll catch P2002 below.
         await this.prisma.idempotencyKey

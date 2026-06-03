@@ -30,9 +30,7 @@ interface FailedJob {
   timestamp: number;
 }
 
-interface FailedJobsResponse {
-  jobs: FailedJob[];
-}
+type FailedJobsResponse = FailedJob[];
 
 const QUEUE_ICONS: Record<string, string> = {
   'lead-intake': 'users',
@@ -92,7 +90,7 @@ export default function QueuePage() {
 
   const retryJob = useMutation({
     mutationFn: ({ queue, jobId }: { queue: string; jobId: string }) =>
-      apiClient.post(`/admin/queues/${queue}/failed/${jobId}/retry`, {}),
+      apiClient.post(`/admin/queues/${queue}/jobs/${jobId}/retry`, {}),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-queue-failed', selected] });
       void qc.invalidateQueries({ queryKey: ['admin-queues'] });
@@ -103,11 +101,11 @@ export default function QueuePage() {
 
   const retryAll = useMutation({
     mutationFn: (queue: string) =>
-      apiClient.post<{ retried: number }>(`/admin/queues/${queue}/failed/retry-all`, {}),
+      apiClient.post<{ retried: number }>(`/admin/queues/${queue}/retry-all`, {}),
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['admin-queue-failed', selected] });
       void qc.invalidateQueries({ queryKey: ['admin-queues'] });
-      addToast(`${data.retried} jobs requeued`, 'success');
+      addToast(`${data?.retried ?? 0} jobs requeued`, 'success');
     },
     onError: () => addToast('Bulk retry failed', 'error'),
   });
@@ -261,7 +259,7 @@ export default function QueuePage() {
               <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
                 Failed jobs — <span style={{ color: 'var(--red)', fontFamily: "'JetBrains Mono', monospace" }}>{selected}</span>
               </h3>
-              {dlqData && dlqData.jobs.length > 0 && (
+              {dlqData && dlqData.length > 0 && (
                 <button
                   onClick={() => selected && retryAll.mutate(selected)}
                   disabled={retryAll.isPending}
@@ -281,7 +279,7 @@ export default function QueuePage() {
                   }}
                 >
                   <Icon name="reload" size={11} stroke={2} />
-                  Retry all ({dlqData.jobs.length})
+                  Retry all ({dlqData.length})
                 </button>
               )}
               <button
@@ -296,7 +294,7 @@ export default function QueuePage() {
               Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} style={{ height: 56, borderRadius: 10, marginBottom: 6 }} />
               ))
-            ) : !dlqData || dlqData.jobs.length === 0 ? (
+            ) : !dlqData || dlqData.length === 0 ? (
               <EmptyState
                 illustration={<Icon name="shield" size={24} stroke={1.5} style={{ color: 'var(--text-4)' }} />}
                 title="No failed jobs"
@@ -304,7 +302,7 @@ export default function QueuePage() {
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {dlqData.jobs.map((job, i) => (
+                {dlqData.map((job, i) => (
                   <motion.div
                     key={job.id ?? i}
                     initial={{ opacity: 0, x: -8 }}

@@ -131,6 +131,21 @@ export class AiResponseProcessor {
     const fhaResult = checkFairHousing(content);
     if (!fhaResult.passed && fhaResult.severity === 'block') {
       logger.error({ leadId, flaggedPatterns: fhaResult.flaggedPatterns }, 'ai-response: FHA violation blocked');
+      // Escalate conversation so an agent knows to respond manually
+      await this.prisma.conversation.update({
+        where: { id: conversationId, workspaceId },
+        data: { escalationLevel: 'URGENT', aiActive: false },
+      });
+      void this.notificationService.notifyWorkspace(workspaceId, NotificationType.AI_ESCALATION, {
+        leadId,
+        conversationId,
+        reason: 'AI response blocked by Fair Housing filter — manual response required',
+      });
+      this.realtimeEmitter.emitToWorkspace(workspaceId, 'conversation:escalated', {
+        conversationId,
+        escalationLevel: 'URGENT',
+        reason: 'AI response blocked (FHA compliance)',
+      });
       return;
     }
 
@@ -192,7 +207,16 @@ export class AiResponseProcessor {
         this.prisma,
       );
       if (!smsResult.ok) {
-        logger.warn({ err: smsResult.error, leadId }, 'ai-response: SMS not sent (gate or transport failure)');
+        logger.error({ err: smsResult.error, leadId, messageId: message.id }, 'ai-response: SMS delivery failed');
+        await this.prisma.message.update({
+          where: { id: message.id, workspaceId },
+          data: { failedAt: new Date(), failReason: smsResult.error?.message ?? 'Twilio delivery failure' },
+        });
+        void this.notificationService.notifyWorkspace(workspaceId, NotificationType.AI_ESCALATION, {
+          leadId,
+          conversationId,
+          reason: `SMS to lead failed: ${smsResult.error?.message ?? 'Twilio error'}. Manual outreach required.`,
+        });
       } else {
         await this.prisma.message.update({
           where: { id: message.id, workspaceId },

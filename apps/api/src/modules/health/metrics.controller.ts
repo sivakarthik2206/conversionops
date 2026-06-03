@@ -1,20 +1,19 @@
-import { Controller, Get, Header, Res } from '@nestjs/common';
+import { Controller, Get, Header, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { redisConnection } from '@conversionops/orchestration';
 import { HealthCollector } from '@conversionops/observability';
 import { Public } from '../../common/decorators/public.decorator';
+import { AdminGuard } from '../admin/admin.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Prometheus-compatible metrics endpoint.
- * Emits text/plain in the OpenMetrics exposition format so Cloud Monitoring,
- * Prometheus, or any scraper can ingest it.
- *
- * Endpoint is @Public (no JWT required) but should be firewalled to internal
- * Cloud Run traffic only in production (add IAM binding or VPC-SC).
+ * Protected by AdminGuard (x-admin-api-key header required).
+ * This prevents scraping of capacity/health data by external parties.
  */
 @Controller('metrics')
 @Public()
+@UseGuards(AdminGuard)
 export class MetricsController {
   constructor(private readonly prisma: PrismaService) {}
 
