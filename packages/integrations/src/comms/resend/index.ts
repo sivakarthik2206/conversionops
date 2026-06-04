@@ -88,6 +88,40 @@ export class ResendClient {
     }
   }
 
+  async sendWelcomeWithPassword(
+    to: string,
+    name: string,
+    workspaceName: string,
+    tempPassword: string,
+    appUrl: string,
+  ): Promise<Result<void>> {
+    logger.info({ to, workspaceName }, 'Sending welcome email with temp password');
+    try {
+      const { error } = await this.resend.emails.send({
+        from: this.fromAddress,
+        to,
+        subject: 'Your ConversionOps account is ready',
+        html: welcomeWithPasswordTemplate(name, workspaceName, to, tempPassword, appUrl),
+        text:
+          `Welcome to ${workspaceName} on ConversionOps\n\n` +
+          `Your account has been created. Sign in with these credentials:\n\n` +
+          `Email:    ${to}\n` +
+          `Password: ${tempPassword}\n\n` +
+          `Sign in here: ${appUrl}/login\n\n` +
+          `For security, please change your password after your first login.\n\n` +
+          `ConversionOps\nhello@conversionops.in`,
+        headers: { 'X-Entity-Ref-ID': `welcome-${Date.now()}` },
+      });
+      if (error) {
+        logger.error({ error, to }, 'Resend error sending welcome email');
+        return { ok: false, error: new ExternalServiceError('Resend', JSON.stringify(error)) };
+      }
+      return { ok: true, value: undefined };
+    } catch (e) {
+      return { ok: false, error: new ExternalServiceError('Resend', e instanceof Error ? e.message : String(e)) };
+    }
+  }
+
   /**
    * Sends an agent action-needed alert (escalation, hot lead, etc.).
    */
@@ -350,6 +384,53 @@ function passwordResetTemplate(link: string): string {
   </td></tr>
   <tr><td style="background:#f9f9f9;padding:24px 40px;text-align:center;">
     <p style="margin:0;color:#a1a1aa;font-size:12px;">ConversionOps &middot; hello@conversionops.in</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function welcomeWithPasswordTemplate(name: string, workspaceName: string, email: string, tempPassword: string, appUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your ConversionOps account is ready</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+  <tr><td style="background:#0a0a0b;padding:32px 40px;text-align:center;">
+    <span style="font-size:24px;font-weight:700;color:#e8ff47;letter-spacing:-0.5px;">ConversionOps</span>
+  </td></tr>
+  <tr><td style="padding:40px;">
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:600;color:#111114;">Welcome to ${workspaceName}, ${name}!</h1>
+    <p style="margin:0 0 28px;color:#71717a;font-size:15px;">Your account has been created. Sign in with the credentials below.</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;border:1px solid #e4e4e7;border-radius:10px;margin:0 0 28px;">
+      <tr>
+        <td style="padding:16px 20px;border-bottom:1px solid #e4e4e7;">
+          <span style="font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;">Email</span><br>
+          <span style="font-size:15px;color:#111114;margin-top:4px;display:block;">${email}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:16px 20px;">
+          <span style="font-size:12px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;">Temporary Password</span><br>
+          <span style="font-size:17px;color:#111114;font-family:'Courier New',monospace;letter-spacing:0.05em;margin-top:4px;display:block;font-weight:700;">${tempPassword}</span>
+        </td>
+      </tr>
+    </table>
+
+    <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;"><tr><td style="border-radius:8px;background:#0a0a0b;">
+      <a href="${appUrl}/login" style="display:inline-block;padding:14px 32px;color:#e8ff47;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">Sign in to ConversionOps &rarr;</a>
+    </td></tr></table>
+
+    <hr style="border:none;border-top:1px solid #f0f0f0;margin:0 0 20px;">
+    <p style="margin:0;color:#a1a1aa;font-size:13px;line-height:1.5;">For security, please change your password after your first login using the profile menu.</p>
+  </td></tr>
+  <tr><td style="background:#f9f9f9;padding:24px 40px;text-align:center;">
+    <p style="margin:0;color:#a1a1aa;font-size:12px;">ConversionOps &middot; hello@conversionops.in &middot; <a href="https://conversionops.in/legal/privacy" style="color:#a1a1aa;">Privacy Policy</a></p>
   </td></tr>
 </table>
 </td></tr>

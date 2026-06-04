@@ -15,6 +15,8 @@ enum Plan {
 }
 
 enum WorkspaceStatus {
+  FREE
+  TRIAL
   ONBOARDING
   ACTIVE
   PAUSED
@@ -185,7 +187,7 @@ model Workspace {
   name   String
   slug   String          @unique
   plan   Plan            @default(SOLO)
-  status WorkspaceStatus @default(ONBOARDING)
+  status WorkspaceStatus @default(FREE)
 
   ownerEmail  String
   ownerPhone  String?

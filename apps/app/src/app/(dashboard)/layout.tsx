@@ -13,6 +13,7 @@ interface WorkspaceContext {
   id: string;
   name: string;
   plan: string;
+  status: string;
   aiPaused: boolean;
   tokenUsageCurrentMonth: number;
   tokenQuotaMonthly: number;
@@ -70,7 +71,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             aiPaused={workspace?.aiPaused ?? false}
             aiQuotaWarning={aiQuotaWarning}
           />
-          <main style={{ paddingTop: 64, minHeight: '100vh' }}>
+          {workspace?.status === 'CANCELLED' && (
+            <div style={{ background: 'rgba(255,92,92,0.10)', borderBottom: '1px solid rgba(255,92,92,0.25)', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 64 }}>
+              <span style={{ fontSize: 13, color: 'var(--red)' }}>
+                Your subscription has been cancelled. Renew your plan to restore full access.
+              </span>
+              <a href="/settings/billing" style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', textDecoration: 'none', padding: '5px 12px', border: '1px solid rgba(255,92,92,0.4)', borderRadius: 7 }}>
+                Renew →
+              </a>
+            </div>
+          )}
+          <main style={{ paddingTop: workspace?.status === 'CANCELLED' ? 0 : 64, minHeight: '100vh' }}>
             <div style={{ padding: '32px 32px 64px', maxWidth: 1400, margin: '0 auto' }}>
               <AnimatePresence mode="wait">
                 <motion.div

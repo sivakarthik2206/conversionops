@@ -5,6 +5,8 @@ export interface JWTPayload {
   userId: string;
   workspaceId: string;
   role: string;
+  plan?: string;
+  status?: string;
   iat?: number;
   exp?: number;
 }

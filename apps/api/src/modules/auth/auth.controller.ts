@@ -16,10 +16,8 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/user.dec
 import { AuthService } from './auth.service';
 import { logger } from '@conversionops/observability';
 
-const MagicLinkSchema = z.object({ email: z.string().email() });
-const VerifySchema = z.object({ token: z.string().min(10) });
-const SetPasswordSchema = z.object({ password: z.string().min(8, 'Password must be at least 8 characters') });
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+const SetPasswordSchema = z.object({ password: z.string().min(8, 'Password must be at least 8 characters') });
 const ForgotPasswordSchema = z.object({ email: z.string().email() });
 const ResetPasswordSchema = z.object({
   token: z.string().min(1),
@@ -30,39 +28,6 @@ const ResetPasswordSchema = z.object({
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('magic-link')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  async sendMagicLink(
-    @Body(new ZodValidationPipe(MagicLinkSchema)) body: z.infer<typeof MagicLinkSchema>,
-  ) {
-    await this.authService.sendMagicLink(body.email);
-    return { success: true, message: 'If an account exists, a magic link has been sent' };
-  }
-
-  @Post('verify')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  async verifyMagicLink(
-    @Body(new ZodValidationPipe(VerifySchema)) body: z.infer<typeof VerifySchema>,
-  ) {
-    const result = await this.authService.verifyMagicLink(body.token);
-    if (!result.ok) {
-      logger.warn({ reason: result.error.message }, 'Magic link verify rejected');
-      throw new UnauthorizedException(result.error.message);
-    }
-    logger.info({ userId: result.value.user.id }, 'Magic link verify success');
-    return {
-      jwt: result.value.jwt,
-      user: {
-        id: result.value.user.id,
-        email: result.value.user.email,
-        name: result.value.user.name,
-      },
-      hasPassword: result.value.hasPassword,
-    };
-  }
-
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -71,6 +36,7 @@ export class AuthController {
   ) {
     const result = await this.authService.loginWithPassword(body.email, body.password);
     if (!result.ok) {
+      logger.warn({ email: body.email }, 'Login failed');
       throw new UnauthorizedException('Invalid email or password');
     }
     return {
@@ -80,7 +46,7 @@ export class AuthController {
         email: result.value.user.email,
         name: result.value.user.name,
       },
-      hasPassword: true,
+      workspace: result.value.workspace,
     };
   }
 
