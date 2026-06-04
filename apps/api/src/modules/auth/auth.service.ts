@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { generateMagicLinkToken, verifyMagicLinkToken, signToken } from '@conversionops/auth';
 import { ResendClient } from '@conversionops/integrations';
 import { UnauthorizedError } from '@conversionops/sdk-standards';
@@ -12,6 +13,7 @@ export interface AuthenticatedSession {
   jwt: string;
   user: Pick<User, 'id' | 'email' | 'name'>;
   workspaceUser: WorkspaceUser;
+  hasPassword: boolean;
 }
 
 @Injectable()
@@ -27,18 +29,16 @@ export class AuthService {
     const secret = process.env['MAGIC_LINK_SECRET'];
     if (!secret) {
       logger.error({}, 'MAGIC_LINK_SECRET not configured');
-      return { ok: true, value: undefined }; // silent — never reveal config errors to caller
+      return { ok: true, value: undefined };
     }
 
     try {
-      // Upsert user so they exist before the token is stored
       const user = await this.prisma.user.upsert({
         where: { email: normalizedEmail },
         create: { email: normalizedEmail, emailVerified: false },
         update: {},
       });
 
-      // Get or create workspace so we have a name for the email
       let workspaceName = 'ConversionOps';
       const existingWU = await this.prisma.workspaceUser.findFirst({
         where: { userId: user.id, isActive: true, deletedAt: null },
@@ -61,7 +61,6 @@ export class AuthService {
         workspaceName = existingWU.workspace.name;
       }
 
-      // Generate token and store its hash so it can only be used once
       const token = generateMagicLinkToken(normalizedEmail, secret);
       const tokenHash = createHash('sha256').update(token).digest('hex');
 
@@ -90,7 +89,6 @@ export class AuthService {
       logger.error({ err, email: normalizedEmail }, 'sendMagicLink error');
     }
 
-    // Always return ok — never reveal whether an account exists
     return { ok: true, value: undefined };
   }
 
@@ -98,7 +96,6 @@ export class AuthService {
     const secret = process.env['MAGIC_LINK_SECRET'];
     if (!secret) return { ok: false, error: new Error('MAGIC_LINK_SECRET not configured') };
 
-    // 1. Verify HMAC signature and extract email
     const verifyResult = verifyMagicLinkToken(token, secret);
     if (!verifyResult.ok) {
       logger.error({ reason: verifyResult.error.message, tokenLength: token.length }, 'Token verification failed');
@@ -107,25 +104,21 @@ export class AuthService {
 
     const { email } = verifyResult.value;
 
-    // 2. Load user
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       return { ok: false, error: new UnauthorizedError('Invalid token') };
     }
 
-    // 3. Check stored hash matches (replay protection)
     const tokenHash = createHash('sha256').update(token).digest('hex');
     if (!user.magicLinkToken || user.magicLinkToken !== tokenHash) {
       logger.error({ email, hasStoredToken: !!user.magicLinkToken }, 'Token hash mismatch or already used');
       return { ok: false, error: new UnauthorizedError('Token already used or invalid') };
     }
 
-    // 4. Check DB-level expiry (belt-and-suspenders on top of HMAC exp)
     if (!user.magicLinkExpiresAt || user.magicLinkExpiresAt < new Date()) {
       return { ok: false, error: new UnauthorizedError('Token expired') };
     }
 
-    // 5. Consume token (one-time use)
     await this.prisma.user.update({
       where: { email },
       data: {
@@ -136,10 +129,8 @@ export class AuthService {
       },
     });
 
-    // 6. Load or create workspace membership
     const workspaceUser = await this.findOrCreateWorkspaceUser(user.id, email);
 
-    // 7. Issue JWT
     const jwtSecret = process.env['JWT_SECRET'];
     if (!jwtSecret) return { ok: false, error: new Error('JWT_SECRET not configured') };
 
@@ -157,8 +148,129 @@ export class AuthService {
         jwt,
         user: { id: user.id, email: user.email, name: user.name },
         workspaceUser,
+        hasPassword: !!user.passwordHash,
       },
     };
+  }
+
+  async setPassword(userId: string, password: string): Promise<Result<void>> {
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return { ok: false, error: new Error('User not found') };
+
+      const hash = await bcrypt.hash(password, 12);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: hash },
+      });
+
+      logger.info({ userId }, 'Password set');
+      return { ok: true, value: undefined };
+    } catch (err) {
+      logger.error({ err, userId }, 'setPassword error');
+      return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  }
+
+  async loginWithPassword(email: string, password: string): Promise<Result<AuthenticatedSession>> {
+    const normalizedEmail = email.toLowerCase().trim();
+    try {
+      const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (!user || !user.passwordHash) {
+        return { ok: false, error: new UnauthorizedError('Invalid credentials') };
+      }
+
+      const match = await bcrypt.compare(password, user.passwordHash);
+      if (!match) {
+        return { ok: false, error: new UnauthorizedError('Invalid credentials') };
+      }
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      const workspaceUser = await this.findOrCreateWorkspaceUser(user.id, normalizedEmail);
+
+      const jwtSecret = process.env['JWT_SECRET'];
+      if (!jwtSecret) return { ok: false, error: new Error('JWT_SECRET not configured') };
+
+      const jwt = signToken(
+        { userId: user.id, workspaceId: workspaceUser.workspaceId, role: workspaceUser.role },
+        jwtSecret,
+        '7d',
+      );
+
+      logger.info({ userId: user.id }, 'Password login successful');
+
+      return {
+        ok: true,
+        value: {
+          jwt,
+          user: { id: user.id, email: user.email, name: user.name },
+          workspaceUser,
+          hasPassword: true,
+        },
+      };
+    } catch (err) {
+      logger.error({ err, email: normalizedEmail }, 'loginWithPassword error');
+      return { ok: false, error: new UnauthorizedError('Invalid credentials') };
+    }
+  }
+
+  async initiatePasswordReset(email: string): Promise<void> {
+    const normalizedEmail = email.toLowerCase().trim();
+    try {
+      const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (!user) return; // silent — prevent email enumeration
+
+      const resetToken = randomBytes(32).toString('hex');
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetToken,
+          resetTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+
+      const appUrl = (
+        process.env['APP_URL'] ??
+        process.env['NEXT_PUBLIC_APP_URL'] ??
+        'https://app.conversionops.in'
+      ).replace(/\/$/, '');
+      const link = `${appUrl}/auth/reset-password?token=${resetToken}`;
+
+      await this.resend.sendPasswordReset(normalizedEmail, link);
+      logger.info({ email: normalizedEmail }, 'Password reset email sent');
+    } catch (err) {
+      logger.error({ err, email: normalizedEmail }, 'initiatePasswordReset error');
+    }
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<Result<void>> {
+    try {
+      const user = await this.prisma.user.findUnique({ where: { resetToken: token } });
+      if (!user || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < new Date()) {
+        return { ok: false, error: new BadRequestException('Reset link is invalid or has expired') };
+      }
+
+      const hash = await bcrypt.hash(newPassword, 12);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: hash,
+          resetToken: null,
+          resetTokenExpiresAt: null,
+        },
+      });
+
+      logger.info({ userId: user.id }, 'Password reset complete');
+      return { ok: true, value: undefined };
+    } catch (err) {
+      if (err instanceof BadRequestException) return { ok: false, error: err };
+      logger.error({ err }, 'resetPassword error');
+      return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
+    }
   }
 
   private async findOrCreateWorkspaceUser(userId: string, email: string): Promise<WorkspaceUser> {

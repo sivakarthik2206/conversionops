@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/api/',
   '/robots.txt',
   '/sitemap.xml',
+  '/not-found',
 ];
 
 /**

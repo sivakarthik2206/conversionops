@@ -7,8 +7,8 @@ type IconName =
   | 'arrow-right' | 'arrow-up' | 'arrow-down' | 'chevron-down'
   | 'chevron-up' | 'chevron-right' | 'sparkle' | 'bot' | 'user'
   | 'send' | 'reload' | 'loader' | 'lock' | 'shield' | 'mail'
-  | 'phone' | 'globe' | 'building' | 'pause' | 'play' | 'eye'
-  | 'edit' | 'trash' | 'copy' | 'external' | 'menu' | 'grip'
+  | 'phone' | 'globe' | 'building' | 'pause' | 'play' | 'eye' | 'eye-off'
+  | 'edit' | 'trash' | 'copy' | 'external' | 'menu' | 'grip' | 'more-horizontal'
   | 'logout' | 'logo-mark' | 'sliders' | 'bolt' | 'fire' | 'cpu'
   | 'clock' | 'target' | 'star' | 'inbox';
 
@@ -72,6 +72,8 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: Props) {
     case 'pause':        return <svg {...c}><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>;
     case 'play':         return <svg {...c}><path d="M6 4l14 8-14 8V4z" fill="currentColor" stroke="none" /></svg>;
     case 'eye':          return <svg {...c}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>;
+    case 'eye-off':      return <svg {...c}><path d="M17.9 17.9A9.8 9.8 0 0 1 12 19c-6.5 0-10-7-10-7a17.7 17.7 0 0 1 4.1-5.1M9.9 4.2A9.6 9.6 0 0 1 12 4c6.5 0 10 7 10 7a17.7 17.7 0 0 1-2.1 3M1 1l22 22" /></svg>;
+    case 'more-horizontal': return <svg {...c}><circle cx="6" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="18" cy="12" r="1.2" fill="currentColor" stroke="none" /></svg>;
     case 'edit':         return <svg {...c}><path d="M3 21h4l11-11-4-4L3 17v4z" /><path d="M14 6l4 4" /></svg>;
     case 'trash':        return <svg {...c}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" /></svg>;
     case 'copy':         return <svg {...c}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;

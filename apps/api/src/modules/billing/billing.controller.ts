@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { z } from 'zod';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RbacGuard, RequirePermission } from '../../common/guards/rbac.guard';
@@ -25,7 +26,10 @@ type CheckoutDto = z.infer<typeof CheckoutSchema>;
 @Controller('billing')
 @UseGuards(AuthGuard, RbacGuard)
 export class BillingController {
-  constructor(private readonly billingService: BillingService) {}
+  constructor(
+    private readonly billingService: BillingService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post('checkout')
   @HttpCode(HttpStatus.OK)
@@ -54,5 +58,26 @@ export class BillingController {
     const result = await this.billingService.getUsage(workspace.id);
     if (!result.ok) throw new InternalServerErrorException('Failed to load usage data');
     return result.value;
+  }
+
+  @Get('status')
+  @RequirePermission('billing:read')
+  async getBillingStatus(@CurrentWorkspace() workspace: AuthenticatedWorkspace) {
+    try {
+      const ws = await this.prisma.workspace.findUnique({
+        where: { id: workspace.id },
+        select: { plan: true, status: true, trialEndsAt: true, stripeSubscriptionId: true },
+      });
+      if (!ws) throw new NotFoundException('Workspace not found');
+      return {
+        plan: ws.plan,
+        status: ws.stripeSubscriptionId ? ws.status : 'NO_BILLING',
+        trialEndsAt: ws.trialEndsAt?.toISOString() ?? null,
+        stripeConfigured: this.billingService.isStripeConfigured(),
+      };
+    } catch (e) {
+      if (e instanceof NotFoundException) throw e;
+      return { plan: 'SOLO', status: 'NO_BILLING', trialEndsAt: null, stripeConfigured: false };
+    }
   }
 }

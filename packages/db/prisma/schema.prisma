@@ -254,6 +254,12 @@ model User {
   magicLinkToken     String?   @unique
   magicLinkExpiresAt DateTime?
 
+  passwordHash          String?
+  resetToken            String?   @unique
+  resetTokenExpiresAt   DateTime?
+  inviteToken           String?   @unique
+  inviteTokenExpiresAt  DateTime?
+
   deletedAt   DateTime?
   suspendedAt DateTime?
   suspendedBy String?

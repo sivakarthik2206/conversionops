@@ -67,6 +67,27 @@ export class ResendClient {
     }
   }
 
+  async sendPasswordReset(to: string, link: string): Promise<Result<void>> {
+    logger.info({ to }, 'Sending password reset email');
+    try {
+      const { error } = await this.resend.emails.send({
+        from: this.fromAddress,
+        to,
+        subject: 'Reset your ConversionOps password',
+        html: passwordResetTemplate(link),
+        text: `Reset your ConversionOps password\n\nClick this link to set a new password: ${link}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, ignore this email.\n\nConversionOps\nhello@conversionops.in`,
+        headers: { 'X-Entity-Ref-ID': `pwd-reset-${Date.now()}` },
+      });
+      if (error) {
+        logger.error({ error, to }, 'Resend error sending password reset');
+        return { ok: false, error: new ExternalServiceError('Resend', JSON.stringify(error)) };
+      }
+      return { ok: true, value: undefined };
+    } catch (e) {
+      return { ok: false, error: new ExternalServiceError('Resend', e instanceof Error ? e.message : String(e)) };
+    }
+  }
+
   /**
    * Sends an agent action-needed alert (escalation, hot lead, etc.).
    */
@@ -300,6 +321,35 @@ function quotaWarningTemplate(workspaceName: string, percentUsed: number): strin
   </td></tr>
   <tr><td style="background:#f9f9f9;padding:16px 40px;text-align:center;">
     <p style="margin:0;color:#a1a1aa;font-size:12px;">ConversionOps &middot; <a href="https://conversionops.in/legal/privacy" style="color:#a1a1aa;">Privacy Policy</a></p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function passwordResetTemplate(link: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset your password</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;">
+  <tr><td style="background:#0a0a0b;padding:32px 40px;text-align:center;">
+    <span style="font-size:24px;font-weight:700;color:#e8ff47;">ConversionOps</span>
+  </td></tr>
+  <tr><td style="padding:40px;">
+    <h1 style="margin:0 0 16px;font-size:24px;font-weight:600;color:#111114;">Reset your password</h1>
+    <p style="margin:0 0 32px;color:#71717a;font-size:15px;">Click the button below to set a new password. This link expires in 15 minutes.</p>
+    <table cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#0a0a0b;">
+      <a href="${link}" style="display:inline-block;padding:14px 32px;color:#e8ff47;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">Reset password &rarr;</a>
+    </td></tr></table>
+    <p style="margin:32px 0 0;color:#a1a1aa;font-size:13px;">If you didn't request a password reset, ignore this email.</p>
+  </td></tr>
+  <tr><td style="background:#f9f9f9;padding:24px 40px;text-align:center;">
+    <p style="margin:0;color:#a1a1aa;font-size:12px;">ConversionOps &middot; hello@conversionops.in</p>
   </td></tr>
 </table>
 </td></tr>

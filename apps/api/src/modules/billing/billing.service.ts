@@ -237,6 +237,10 @@ export class BillingService {
   getStripe(): InstanceType<typeof Stripe> {
     return this.stripe;
   }
+
+  isStripeConfigured(): boolean {
+    return this.stripeConfigured;
+  }
 }
 
 function resolvePlan(priceId: string): 'SOLO' | 'BROKERAGE' | 'ENTERPRISE' {
