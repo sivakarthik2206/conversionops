@@ -1,7 +1,19 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Icon } from '@/components/Icon';
+
+function PasswordUpdatedBanner() {
+  const searchParams = useSearchParams();
+  if (searchParams.get('message') !== 'password_updated') return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(71,255,142,0.08)', border: '1px solid rgba(71,255,142,0.25)', borderRadius: 8, fontSize: 13, color: '#47ff8e', marginBottom: 20 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+      Password updated successfully. Sign in with your new password.
+    </div>
+  );
+}
 
 function storeSession(jwt: string) {
   try { localStorage.setItem('co_token', jwt); } catch { /* private mode */ }
@@ -78,6 +90,10 @@ export default function LoginPage() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 36px', textAlign: 'center' }}>
           Enter your email and password to continue
         </p>
+
+        <Suspense fallback={null}>
+          <PasswordUpdatedBanner />
+        </Suspense>
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
