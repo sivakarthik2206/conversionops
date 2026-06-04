@@ -8,6 +8,7 @@ import { useConversations } from '@/hooks/useConversations';
 import { Icon } from '@/components/Icon';
 import { CountUp } from '@/components/CountUp';
 import Link from 'next/link';
+import { OnboardingGuide } from '@/components/OnboardingGuide';
 
 interface WorkspaceHealth {
   totalLeads: number;
@@ -57,8 +58,19 @@ export default function OverviewPage() {
     refetchInterval: 30_000,
   });
 
+  const { data: intData } = useQuery<{ integrations: Array<{ provider: string; status: string }> }>({
+    queryKey: ['integrations'],
+    queryFn: () => apiClient.get('/integrations'),
+    staleTime: 30_000,
+  });
+
   const { conversations, isLoading: convsLoading } = useConversations({ limit: 5 });
   const { leads } = useLeads({ limit: 50 });
+
+  const connectedCount = (intData?.integrations ?? []).filter(i => i.status === 'connected').length;
+  if (connectedCount === 0 && !healthLoading) {
+    return <OnboardingGuide integrations={intData?.integrations ?? []} />;
+  }
 
   const tierCounts = leads.reduce<Record<string, number>>((acc, l) => {
     acc[l.tier] = (acc[l.tier] ?? 0) + 1;

@@ -31,6 +31,7 @@ import { AppointmentModule } from './modules/appointment/appointment.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { RealtimeGateway } from './gateway/realtime.gateway';
 import { WorkspaceRoomsService } from './gateway/workspace.rooms';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
@@ -64,6 +65,7 @@ import { GenericLeadWebhookController } from './webhooks/generic/generic-lead.we
     RoutingModule,
     AdminModule,
     NotificationModule,
+    IntegrationsModule,
   ],
   controllers: [
     TwilioSMSWebhookController,
@@ -90,8 +92,7 @@ export class AppModule implements NestModule {
     consumer
       .apply(TenantMiddleware)
       .exclude(
-        { path: 'v1/auth/magic-link', method: RequestMethod.POST },
-        { path: 'v1/auth/verify', method: RequestMethod.POST },
+        { path: 'v1/auth/(.*)', method: RequestMethod.ALL },
         { path: 'v1/webhooks/(.*)', method: RequestMethod.ALL },
         { path: 'v1/admin/(.*)', method: RequestMethod.ALL },
         { path: 'v1/health', method: RequestMethod.GET },
