@@ -57,9 +57,7 @@ export default function ForgotPasswordPage() {
             <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 24px', lineHeight: 1.6 }}>
               If <strong style={{ color: 'var(--text)' }}>{email}</strong> has an account, a reset link is on its way. Check your spam folder if you don&apos;t see it.
             </p>
-            <a href="/login" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>
-              ← Back to sign in
-            </a>
+            <a href="/login" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>← Back to sign in</a>
           </div>
         ) : (
           <>

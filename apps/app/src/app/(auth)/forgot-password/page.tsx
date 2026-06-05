@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
             </div>
             <h1 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 26, color: 'var(--text)', margin: '0 0 12px', fontWeight: 400 }}>Check your email</h1>
             <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 24px', lineHeight: 1.6 }}>If that email exists in our system, a password reset link is on its way. Check your spam folder if you don&apos;t see it.</p>
-            <a href="/auth/login" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>← Back to sign in</a>
+            <a href="/login" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>← Back to sign in</a>
           </div>
         ) : (
           <>

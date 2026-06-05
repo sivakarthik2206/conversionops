@@ -15,6 +15,8 @@ interface BillingStatus {
   customerId: string | null;
 }
 
+interface WorkspaceCtx { id: string; ownerEmail: string; }
+
 interface UsageData { used: number; quota: number; percent: number; }
 
 declare global {
@@ -191,6 +193,12 @@ function PricingCards({ status, workspaceId, userEmail }: { status: BillingStatu
 export default function BillingPage() {
   const paddleLoaded = useRef(false);
 
+  const { data: workspace } = useQuery<WorkspaceCtx>({
+    queryKey: ['workspace-context'],
+    queryFn: () => apiClient.get<WorkspaceCtx>('/workspaces/me'),
+    staleTime: 60_000,
+  });
+
   const { data: billingStatus } = useQuery<BillingStatus>({
     queryKey: ['billing-status'],
     queryFn: () => apiClient.get<BillingStatus>('/billing/status'),
@@ -286,8 +294,8 @@ export default function BillingPage() {
               {billingStatus && (
                 <PricingCards
                   status={billingStatus}
-                  workspaceId=""
-                  userEmail=""
+                  workspaceId={workspace?.id ?? ''}
+                  userEmail={workspace?.ownerEmail ?? ''}
                 />
               )}
               <p style={{ marginTop: 20, fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>

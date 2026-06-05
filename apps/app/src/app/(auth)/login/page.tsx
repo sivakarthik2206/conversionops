@@ -47,6 +47,10 @@ export default function LoginPage() {
       const jwt = data.jwt as string;
       if (!jwt) { setError('Login failed. Please try again.'); return; }
       storeSession(jwt);
+      try {
+        if (data.user) localStorage.setItem('co_user', JSON.stringify(data.user));
+        if (data.workspace) localStorage.setItem('co_workspace', JSON.stringify(data.workspace));
+      } catch { /* private/storage-full mode */ }
       window.location.href = '/';
     } catch {
       setError('Connection error. Please check your network and try again.');

@@ -6,6 +6,11 @@ export interface ApiError {
   timestamp?: string;
 }
 
+function showGlobalToast(message: string, type: 'error' | 'info' | 'success') {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('co:toast', { detail: { message, type } }));
+}
+
 export class ApiClientError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -55,6 +60,13 @@ async function handleResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore parse failure
     }
+
+    if (res.status === 403) {
+      showGlobalToast("You don't have permission to do that.", 'error');
+    } else if (res.status >= 500) {
+      showGlobalToast('Something went wrong. Try again.', 'error');
+    }
+
     throw new ApiClientError(
       res.status,
       body.error ?? 'UNKNOWN_ERROR',

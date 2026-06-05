@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
       });
       if (!res.ok) throw new Error('failed');
       setDone(true);
-      setTimeout(() => { window.location.href = '/auth/login'; }, 2000);
+      setTimeout(() => { window.location.href = '/login?message=password_updated'; }, 2000);
     } catch {
       setError('This link has expired or is invalid. Please request a new reset link.');
     } finally {

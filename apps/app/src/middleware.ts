@@ -3,9 +3,11 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = [
   '/login',
+  '/forgot-password',
+  '/reset-password',
   '/auth/forgot-password',
   '/auth/reset-password',
-  '/auth/verify',       // kept for redirect
+  '/auth/verify',
   '/api/',
   '/_next',
   '/favicon',
