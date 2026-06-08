@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Skeleton, EmptyState } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
+import { formatRelativeTime } from '@/lib/format-time';
 import { Icon } from '@/components/Icon';
 import { useRealtime } from '@/hooks/useRealtime';
 
@@ -41,17 +42,6 @@ const TYPE_META: Record<string, { label: string; color: string; icon: string; bg
 };
 
 const ALL_TYPES = Object.keys(TYPE_META);
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
 
 function isRecent(dateStr: string): boolean {
   return Date.now() - new Date(dateStr).getTime() < 24 * 60 * 60 * 1000;
@@ -249,7 +239,7 @@ export default function NotificationsPage() {
                         color: 'var(--text-4)',
                         fontFamily: "'JetBrains Mono', monospace",
                       }}>
-                        {timeAgo(n.createdAt)}
+                        {formatRelativeTime(n.createdAt)}
                       </span>
                       <span style={{
                         fontSize: 10,

@@ -1,0 +1,16 @@
+{
+  "name": "ConversionOps",
+  "short_name": "ConversionOps",
+  "description": "AI lead conversion infrastructure for real estate professionals.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#07070a",
+  "background_color": "#07070a",
+  "display": "standalone",
+  "start_url": "/"
+}

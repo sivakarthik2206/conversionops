@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Skeleton, EmptyState, useToast } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
+import { formatRelativeTime } from '@/lib/format-time';
 import { Icon } from '@/components/Icon';
 
 interface QueueStat {
@@ -59,15 +60,6 @@ function statusLabel(q: QueueStat): string {
   if (q.active > 0) return 'processing';
   if (q.waiting > 0) return 'queued';
   return 'idle';
-}
-
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
 }
 
 export default function QueuePage() {
@@ -127,7 +119,7 @@ export default function QueuePage() {
             BullMQ job queue health
             {dataUpdatedAt > 0 && (
               <span style={{ marginLeft: 10, fontSize: 11, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
-                updated {timeAgo(dataUpdatedAt)}
+                updated {formatRelativeTime(dataUpdatedAt)}
               </span>
             )}
           </p>
@@ -323,7 +315,7 @@ export default function QueuePage() {
                           </span>
                           {job.processedOn && (
                             <span style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
-                              {timeAgo(job.processedOn)}
+                              {formatRelativeTime(job.processedOn)}
                             </span>
                           )}
                         </div>

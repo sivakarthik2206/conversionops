@@ -3,7 +3,7 @@ import Footer from '@/components/layout/Footer';
 import { LegalShell } from '@/components/legal/LegalShell';
 
 export const metadata = {
-  title: 'Terms of Service â€” ConversionOps',
+  title: 'Terms of Service — ConversionOps',
   description: 'ConversionOps terms of service and acceptable use policy.',
 };
 
@@ -51,12 +51,12 @@ const SECTIONS = [
   {
     id: 'governing',
     title: 'Governing law',
-    body: `These terms are governed by the laws of the State of Delaware, USA. Disputes shall be resolved by binding arbitration under AAA Commercial Arbitration Rules, except for injunctive relief which may be sought in state or federal courts in Delaware.`,
+    body: `These terms are governed by the laws of India. Disputes shall first be referred to mediation, and if unresolved, settled by arbitration under the Arbitration and Conciliation Act, 1996, seated in Bengaluru, Karnataka. Courts in Bengaluru shall have exclusive jurisdiction over matters not subject to arbitration.`,
   },
   {
     id: 'contact',
     title: 'Contact',
-    body: `For terms questions or legal notices: hello@conversionops.in. Registered address: ConversionOps Inc., Delaware, USA.`,
+    body: `For terms questions or legal notices: hello@conversionops.in. Registered address: ConversionOps Pvt. Ltd., Bengaluru, Karnataka, India.`,
   },
 ];
 
@@ -65,9 +65,9 @@ export default function TermsPage() {
     <main style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       <Navbar />
       <LegalShell
-        eyebrow="Legal Â· Terms"
+        eyebrow="Legal · Terms"
         title="Terms of Service"
-        updated="May 20, 2026"
+        updated="June 1, 2025"
         sections={SECTIONS}
       />
       <Footer />

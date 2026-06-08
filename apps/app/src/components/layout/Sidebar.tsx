@@ -44,14 +44,17 @@ interface SidebarProps {
   workspaceName?: string;
   plan?: string;
   onSearchClick?: () => void;
+  open?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace', plan = 'SOLO', onSearchClick }: SidebarProps) {
+export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace', plan = 'SOLO', onSearchClick, open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const planVariant = plan === 'ENTERPRISE' ? 'accent' : plan === 'BROKERAGE' ? 'info' : 'neutral';
 
   return (
     <aside
+      className={`dashboard-sidebar${open ? ' is-open' : ''}`}
       style={{
         position: 'fixed',
         left: 0,
@@ -63,6 +66,7 @@ export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace'
         zIndex: 40,
         background: 'linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 100%)',
         borderRight: '1px solid var(--border)',
+        transition: 'transform 0.3s var(--ease-out-quart)',
       }}
     >
       {/* Logo */}
@@ -157,14 +161,14 @@ export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace'
       <nav style={{ flex: 1, overflowY: 'auto', padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <NavGroup label="Workspace">
           {NAV_PRIMARY.filter(item => item.roles.includes(role)).map(item => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
           ))}
         </NavGroup>
 
         {NAV_OPS.some(item => item.roles.includes(role)) && (
           <NavGroup label="Operations">
             {NAV_OPS.filter(item => item.roles.includes(role)).map(item => (
-              <NavLink key={item.href} item={item} pathname={pathname} />
+              <NavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
             ))}
           </NavGroup>
         )}
@@ -172,7 +176,7 @@ export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace'
         {NAV_TOOLS.some(item => item.roles.includes(role)) && (
           <NavGroup label="Tools">
             {NAV_TOOLS.filter(item => item.roles.includes(role)).map(item => (
-              <NavLink key={item.href} item={item} pathname={pathname} />
+              <NavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
             ))}
           </NavGroup>
         )}
@@ -181,7 +185,7 @@ export default function Sidebar({ role = 'OWNER', workspaceName = 'My Workspace'
 
         <NavGroup label="Account">
           {NAV_FOOTER.map(item => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
           ))}
         </NavGroup>
       </nav>
@@ -244,11 +248,12 @@ function NavGroup({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate?: () => void }) {
   const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       style={{
         display: 'flex',
         alignItems: 'center',

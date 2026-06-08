@@ -8,6 +8,7 @@ import Topbar from '@/components/layout/Topbar';
 import { CommandPalette } from '@/components/CommandPalette';
 import { RealtimeProvider } from '@/components/realtime/RealtimeProvider';
 import { apiClient } from '@/lib/api-client';
+import { pageTitleFor } from '@/lib/page-titles';
 
 interface WorkspaceContext {
   id: string;
@@ -24,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const { data: workspace } = useQuery<WorkspaceContext>({
     queryKey: ['workspace-context'],
@@ -40,6 +42,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace('/login');
     }
   }, [router]);
+
+  useEffect(() => {
+    document.title = `${pageTitleFor(pathname)} · ConversionOps`;
+  }, [pathname]);
+
+  // Close the mobile nav whenever the route changes
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Escape closes the mobile nav
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [mobileNavOpen]);
 
   // ⌘K / Ctrl+K global shortcut
   const openCmd = useCallback(() => setCmdOpen(true), []);
@@ -63,10 +84,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onSearchClick={openCmd}
           workspaceName={workspace?.name}
           plan={workspace?.plan}
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
         />
-        <div style={{ flex: 1, marginLeft: 248, minWidth: 0 }}>
+
+        {/* Overlay — closes the mobile nav on tap, only rendered/visible below the breakpoint */}
+        <div
+          className={`sidebar-overlay${mobileNavOpen ? ' is-open' : ''}`}
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 39 }}
+        />
+
+        <div className="dashboard-shell" style={{ flex: 1, marginLeft: 248, minWidth: 0 }}>
           <Topbar
             onSearchClick={openCmd}
+            onMenuClick={() => setMobileNavOpen(o => !o)}
             userName={workspace?.ownerEmail ?? ''}
             aiPaused={workspace?.aiPaused ?? false}
             aiQuotaWarning={aiQuotaWarning}
@@ -100,6 +133,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="grain" />
         <CommandPalette open={cmdOpen} onClose={closeCmd} />
       </div>
+
+      <style>{`
+        .sidebar-overlay { display: none; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+        @media (max-width: 900px) {
+          .dashboard-sidebar { transform: translateX(-100%); }
+          .dashboard-sidebar.is-open { transform: translateX(0); box-shadow: var(--shadow-lg); }
+          .dashboard-shell { margin-left: 0 !important; }
+          .dashboard-topbar { left: 0 !important; }
+          .mobile-menu-btn { display: inline-flex !important; }
+          .sidebar-overlay { display: block; }
+          .sidebar-overlay.is-open { opacity: 1; pointer-events: auto; }
+        }
+      `}</style>
     </RealtimeProvider>
   );
 }

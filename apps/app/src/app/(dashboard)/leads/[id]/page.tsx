@@ -6,6 +6,7 @@ import { useLead } from '@/hooks/useLeads';
 import { Icon } from '@/components/Icon';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { formatRelativeTime } from '@/lib/format-time';
 import { useState } from 'react';
 
 interface LeadDetail {
@@ -112,13 +113,6 @@ const EVENT_META: Record<string, { color: string; icon: Parameters<typeof Icon>[
   'lead.reactivated':              { color: 'var(--purple)', icon: 'reload' },
 };
 
-function timeAgo(date: string) {
-  const diff = Date.now() - new Date(date).getTime();
-  if (diff < 60000) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-  return new Date(date).toLocaleDateString();
-}
 
 export default function LeadDetailPage() {
   const params = useParams();
@@ -522,7 +516,7 @@ export default function LeadDetailPage() {
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                       <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
-                        {timeAgo(evt.occurredAt)}
+                        {formatRelativeTime(evt.occurredAt)}
                       </span>
                       {evt.triggeredBy && (
                         <span style={{ fontSize: 11, color: 'var(--text-5)', fontFamily: "'JetBrains Mono', monospace" }}>

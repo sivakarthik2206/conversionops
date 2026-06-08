@@ -23,7 +23,7 @@ export default function PrivacyPage() {
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       <Navbar />
-      <LegalShell eyebrow="Legal · Privacy" title="Privacy Policy" updated="May 20, 2026" sections={SECTIONS} />
+      <LegalShell eyebrow="Legal · Privacy" title="Privacy Policy" updated="June 1, 2025" sections={SECTIONS} />
       <Footer />
     </main>
   );

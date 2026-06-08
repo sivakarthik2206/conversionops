@@ -31,9 +31,10 @@ interface Props {
   aiPaused?: boolean;
   aiQuotaWarning?: boolean;
   onSearchClick?: () => void;
+  onMenuClick?: () => void;
 }
 
-export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning = false, onSearchClick }: Props) {
+export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning = false, onSearchClick, onMenuClick }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning
 
   return (
     <header
+      className="dashboard-topbar"
       style={{
         position: 'fixed',
         top: 0,
@@ -85,15 +87,38 @@ export default function Topbar({ userName = '', aiPaused = false, aiQuotaWarning
         borderBottom: '1px solid var(--border)',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <button
+          aria-label="Open navigation menu"
+          onClick={onMenuClick}
+          className="mobile-menu-btn"
+          style={{
+            display: 'none',
+            width: 36,
+            height: 36,
+            borderRadius: 9,
+            background: 'rgba(255,255,255,0.025)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-2)',
+            cursor: 'pointer',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="menu" size={16} stroke={1.8} />
+        </button>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
         {meta.eyebrow && (
           <span className="eyebrow" style={{ color: 'var(--text-4)', fontSize: 9 }}>
             {meta.eyebrow}
           </span>
         )}
-        <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em' }}>
+        <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {meta.title}
         </h1>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

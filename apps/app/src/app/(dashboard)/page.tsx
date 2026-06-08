@@ -1,8 +1,10 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { EmptyState, Skeleton } from '@conversionops/ui';
-import { apiClient } from '@/lib/api-client';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Button, EmptyState, Modal, Skeleton, useToast } from '@conversionops/ui';
+import { apiClient, getUserFriendlyError } from '@/lib/api-client';
+import { formatRelativeTime } from '@/lib/format-time';
 import { useLeads } from '@/hooks/useLeads';
 import { useConversations } from '@/hooks/useConversations';
 import { Icon } from '@/components/Icon';
@@ -22,13 +24,12 @@ interface SystemHealth {
   services: { database: string; redis: string; vertexAi: string };
 }
 
-function timeAgo(date: string) {
-  const diff = Date.now() - new Date(date).getTime();
-  if (diff < 60000) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-  return `${Math.floor(diff/86400000)}d ago`;
+interface WorkspaceCtx {
+  id: string;
+  twilioNumber: string | null;
 }
+
+const TEST_LEAD_MESSAGE = "Hi, I saw your listing on Zillow and I'm interested in scheduling a showing this week. Is it still available?";
 
 const TIER_ORDER = ['PRIORITY', 'HOT', 'WARM', 'COLD', 'UNQUALIFIED'] as const;
 const TIER_META: Record<string, { color: string; icon: 'fire' | 'bolt' | 'target' | 'inbox' | 'minus'; label: string }> = {
@@ -47,9 +48,19 @@ function greeting() {
 }
 
 export default function OverviewPage() {
+  const qc = useQueryClient();
+  const { addToast } = useToast();
+  const [testLeadModal, setTestLeadModal] = useState(false);
+
   const { data: health, isLoading: healthLoading } = useQuery<WorkspaceHealth>({
     queryKey: ['workspace-health'],
     queryFn: () => apiClient.get('/workspaces/me/health'),
+  });
+
+  const { data: workspace } = useQuery<WorkspaceCtx>({
+    queryKey: ['workspace-context'],
+    queryFn: () => apiClient.get('/workspaces/me'),
+    staleTime: 60_000,
   });
 
   const { data: systemHealth } = useQuery<SystemHealth>({
@@ -193,6 +204,49 @@ export default function OverviewPage() {
         </motion.div>
       )}
 
+      {/* Send test lead */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.05 }}
+        className="surface-card"
+        style={{
+          marginBottom: 24,
+          padding: '18px 22px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: 'rgba(232,255,71,0.10)',
+            border: '1px solid rgba(232,255,71,0.25)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--accent)',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="send" size={16} stroke={1.8} />
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0 }}>Test your setup</h3>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0', lineHeight: 1.55 }}>
+            Send a simulated lead to your own number and watch the AI respond in real time.
+          </p>
+        </div>
+        <button onClick={() => setTestLeadModal(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+          <Icon name="send" size={13} stroke={1.8} />
+          Send test lead
+        </button>
+      </motion.div>
+
       {/* Metric grid */}
       <div
         className="metric-grid"
@@ -284,7 +338,7 @@ export default function OverviewPage() {
                       >
                         {conv.aiActive ? 'AI' : 'Human'}
                       </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{timeAgo(conv.updatedAt)}</span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatRelativeTime(conv.updatedAt)}</span>
                     </div>
                   </div>
                   <Icon name="chevron-right" size={14} style={{ color: 'var(--text-4)' }} />
@@ -358,11 +412,122 @@ export default function OverviewPage() {
         </div>
       </div>
 
+      <TestLeadModal
+        open={testLeadModal}
+        phone={workspace?.twilioNumber ?? null}
+        onClose={() => setTestLeadModal(false)}
+        onSent={() => {
+          void qc.invalidateQueries({ queryKey: ['conversations'] });
+          void qc.invalidateQueries({ queryKey: ['leads'] });
+          addToast('Test lead sent — your AI will reply shortly.', 'success');
+        }}
+        showError={msg => addToast(msg, 'error')}
+      />
+
       <style>{`
         @media (max-width: 1024px) { .metric-grid { grid-template-columns: repeat(2, 1fr) !important; } }
         @media (max-width: 900px)  { .dashboard-split { grid-template-columns: 1fr !important; } }
         @media (max-width: 560px)  { .metric-grid { grid-template-columns: 1fr !important; } }
       `}</style>
+    </div>
+  );
+}
+
+function TestLeadModal({
+  open, phone, onClose, onSent, showError,
+}: {
+  open: boolean;
+  phone: string | null;
+  onClose: () => void;
+  onSent: () => void;
+  showError: (msg: string) => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const send = async () => {
+    setSending(true);
+    try {
+      await apiClient.post('/leads', {
+        source: 'TEST',
+        test: true,
+        name: 'Test Lead',
+        phone: phone ?? undefined,
+        message: TEST_LEAD_MESSAGE,
+      });
+      setSent(true);
+      onSent();
+    } catch (e) {
+      showError(getUserFriendlyError(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const close = () => {
+    onClose();
+    setTimeout(() => setSent(false), 200);
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <Modal open={open} onClose={close} title={sent ? 'Test lead sent' : 'Send a test lead'}>
+          {sent ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0, lineHeight: 1.6 }}>
+                A simulated lead just landed in your pipeline. Your AI agent will respond within moments —
+                {phone ? ` watch for a text on ${phone}.` : ' check your conversations to see it live.'}
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Button variant="ghost" size="sm" onClick={close}>Close</Button>
+                <Link href="/conversations" onClick={close}>
+                  <Button variant="primary" size="sm">Go to conversations</Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0, lineHeight: 1.6 }}>
+                We&apos;ll create a simulated lead and send it through your live pipeline so you can see
+                exactly how your AI agent responds.
+              </p>
+              <div
+                style={{
+                  background: 'var(--bg-3)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  padding: 14,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <Row label="Simulating a lead from" value="Zillow" />
+                <Row label="Sent to" value={phone ?? 'Your workspace number'} mono />
+                <Row label="Message" value={TEST_LEAD_MESSAGE} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
+                <Button variant="primary" size="sm" loading={sending} onClick={send}>
+                  Send test lead
+                </Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span className="eyebrow" style={{ color: 'var(--text-4)', fontSize: 9.5 }}>{label}</span>
+      <span style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.5, fontFamily: mono ? "'JetBrains Mono', monospace" : 'inherit' }}>
+        {value}
+      </span>
     </div>
   );
 }

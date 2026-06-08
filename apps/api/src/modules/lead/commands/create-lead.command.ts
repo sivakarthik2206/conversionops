@@ -8,5 +8,6 @@ export class CreateLeadCommand {
     public readonly email?: string,
     public readonly externalId?: string,
     public readonly sourcePayload?: Record<string, unknown>,
+    public readonly message?: string,
   ) {}
 }

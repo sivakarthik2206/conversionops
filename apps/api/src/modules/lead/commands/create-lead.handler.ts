@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { queues } from '@conversionops/orchestration';
+import type { LeadIntakeJobData } from '@conversionops/orchestration';
 import { logger } from '@conversionops/observability';
 import { Result } from '@conversionops/types';
 import type { Lead } from '@conversionops/db';
@@ -38,12 +39,25 @@ export class CreateLeadHandler {
         },
       });
 
+      let jobData: LeadIntakeJobData = { leadId: lead.id, workspaceId: cmd.workspaceId };
+      if (cmd.message) {
+        const workspace = await this.prisma.workspace.findUnique({
+          where: { id: cmd.workspaceId },
+          select: { twilioNumber: true },
+        });
+        jobData = {
+          ...jobData,
+          from: cmd.phone,
+          to: workspace?.twilioNumber ?? undefined,
+          body: cmd.message,
+          source: cmd.source,
+          name: cmd.name,
+          email: cmd.email,
+        };
+      }
+
       await queues.leadIntake
-        .add(
-          'new-lead',
-          { leadId: lead.id, workspaceId: cmd.workspaceId },
-          { removeOnComplete: 500, priority: 1 },
-        )
+        .add('new-lead', jobData, { removeOnComplete: 500, priority: 1 })
         .catch((err: unknown) => logger.error({ err }, 'lead-intake enqueue failed'));
 
       await queues.auditLog

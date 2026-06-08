@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Skeleton, StatusBadge, EmptyState } from '@conversionops/ui';
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { formatRelativeTime, formatMessageTime } from '@/lib/format-time';
 import { useRealtime } from '@/hooks/useRealtime';
 import type {
   MessageNewEvent, ConversationTakeoverEvent,
@@ -42,13 +43,6 @@ interface ConversationDetail extends ConversationSummary {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function timeAgo(date: string) {
-  const diff = Date.now() - new Date(date).getTime();
-  if (diff < 60_000) return 'now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
-  return `${Math.floor(diff / 86_400_000)}d`;
-}
 
 function slaStatus(updatedAt: string, isActive: boolean): 'ok' | 'warn' | 'critical' {
   if (!isActive) return 'ok';
@@ -271,7 +265,7 @@ function ConvRow({
             fontFamily: "'JetBrains Mono', monospace",
             flexShrink: 0,
           }}>
-            {timeAgo(conv.updatedAt)}
+            {formatRelativeTime(conv.updatedAt)}
           </span>
           {unreadCount > 0 && (
             <span style={{
@@ -631,7 +625,7 @@ function ConversationThread({
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: isHuman ? 0 : 2, paddingRight: isHuman ? 2 : 0 }}>
                   <span style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {isSending ? 'sending…' : isFailed ? '' : new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {isSending ? 'sending…' : isFailed ? '' : formatMessageTime(msg.createdAt)}
                   </span>
                   {isFailed && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>

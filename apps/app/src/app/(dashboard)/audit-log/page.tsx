@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { Skeleton, EmptyState } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
+import { formatRelativeTime } from '@/lib/format-time';
 import { Icon } from '@/components/Icon';
 
 interface AuditEntry {
@@ -45,16 +46,6 @@ function actionStyle(action: string) {
   return ACTION_COLORS[key] ?? { color: 'var(--text-3)', bg: 'var(--bg-3)' };
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 const ALL_RESOURCES = ['workspace', 'lead', 'conversation', 'agent', 'routing', 'appointment', 'billing'];
 
@@ -187,7 +178,7 @@ export default function AuditLogPage() {
 
                       {/* Time */}
                       <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
-                        {timeAgo(entry.occurredAt)}
+                        {formatRelativeTime(entry.occurredAt)}
                       </span>
 
                       {hasDetail && (

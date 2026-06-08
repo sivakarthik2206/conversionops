@@ -23,6 +23,32 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * Maps raw error codes/messages (Prisma codes, API error codes, network
+ * failures) to copy a user can act on — never surface internals like P2025.
+ */
+export function getUserFriendlyError(error: unknown): string {
+  let msg = '';
+  if (error instanceof ApiClientError) {
+    msg = `${error.error} ${error.message} ${error.statusCode}`;
+  } else if (error instanceof Error) {
+    msg = error.message;
+  } else {
+    msg = String(error);
+  }
+
+  if (msg.includes('P2025')) return 'Record not found.';
+  if (msg.includes('P2002')) return 'This already exists.';
+  if (msg.includes('P2003')) return 'Invalid reference.';
+  if (msg.includes('UNAUTHORIZED')) return 'Session expired. Please sign in again.';
+  if (msg.includes('FORBIDDEN')) return 'You do not have permission to do this.';
+  if (msg.includes('QUOTA_EXCEEDED')) return 'AI quota reached. Upgrade your plan.';
+  if (msg.includes('TCPA')) return 'Cannot send — number has opted out.';
+  if (msg.includes('fetch failed') || msg.includes('Failed to fetch') || msg.includes('NetworkError')) return 'Connection error. Check your internet.';
+  if (msg.includes('500')) return 'Something went wrong. Try again in a moment.';
+  return 'Something went wrong. Please try again.';
+}
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('co_token');
@@ -61,18 +87,18 @@ async function handleResponse<T>(res: Response): Promise<T> {
       // ignore parse failure
     }
 
-    if (res.status === 403) {
-      showGlobalToast("You don't have permission to do that.", 'error');
-    } else if (res.status >= 500) {
-      showGlobalToast('Something went wrong. Try again.', 'error');
-    }
-
-    throw new ApiClientError(
+    const apiError = new ApiClientError(
       res.status,
       body.error ?? 'UNKNOWN_ERROR',
       body.message ?? `HTTP ${res.status}`,
       body.requestId,
     );
+
+    if (res.status === 403 || res.status >= 500) {
+      showGlobalToast(getUserFriendlyError(apiError), 'error');
+    }
+
+    throw apiError;
   }
 
   if (res.status === 204) return undefined as unknown as T;
@@ -95,6 +121,21 @@ function getBaseURL(): string {
   return resolveBaseURL();
 }
 
+/**
+ * Runs a fetch and maps low-level network failures (DNS, offline, CORS) to a
+ * friendly toast + ApiClientError — these never reach handleResponse since
+ * fetch() rejects before a Response exists.
+ */
+async function runFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    const networkError = new ApiClientError(0, 'NETWORK_ERROR', e instanceof Error ? e.message : 'fetch failed');
+    showGlobalToast(getUserFriendlyError(networkError), 'error');
+    throw networkError;
+  }
+}
+
 export const apiClient = {
   /**
    * GET request with optional query params.
@@ -109,12 +150,12 @@ export const apiClient = {
       const qs = query.toString();
       if (qs) url += `?${qs}`;
     }
-    const res = await fetch(url, { headers: buildHeaders() });
+    const res = await runFetch(url, { headers: buildHeaders() });
     return handleResponse<T>(res);
   },
 
   async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${getBaseURL()}${path}`, {
+    const res = await runFetch(`${getBaseURL()}${path}`, {
       method: 'POST',
       headers: buildHeaders(),
       body: JSON.stringify(body),
@@ -123,7 +164,7 @@ export const apiClient = {
   },
 
   async patch<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${getBaseURL()}${path}`, {
+    const res = await runFetch(`${getBaseURL()}${path}`, {
       method: 'PATCH',
       headers: buildHeaders(),
       body: JSON.stringify(body),
@@ -132,7 +173,7 @@ export const apiClient = {
   },
 
   async delete<T>(path: string): Promise<T> {
-    const res = await fetch(`${getBaseURL()}${path}`, {
+    const res = await runFetch(`${getBaseURL()}${path}`, {
       method: 'DELETE',
       headers: buildHeaders(),
     });

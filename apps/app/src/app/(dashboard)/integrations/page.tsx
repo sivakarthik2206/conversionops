@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '@/lib/api-client';
+import { formatMessageTime } from '@/lib/format-time';
 import { IntegrationCard } from '@/components/integrations/IntegrationCard';
 import { ConnectModal } from '@/components/integrations/ConnectModal';
 import { Icon } from '@/components/Icon';
@@ -81,6 +82,14 @@ function getConfigSummary(provider: ProviderKey, config: Record<string, string>)
 }
 
 export default function IntegrationsPage() {
+  return (
+    <Suspense fallback={null}>
+      <IntegrationsPageInner />
+    </Suspense>
+  );
+}
+
+function IntegrationsPageInner() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const [modalProvider, setModalProvider] = useState<ProviderKey | null>(null);
@@ -141,7 +150,7 @@ export default function IntegrationsPage() {
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  const lastSync = dataUpdatedAt > 0 ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+  const lastSync = dataUpdatedAt > 0 ? formatMessageTime(dataUpdatedAt) : null;
 
   return (
     <div style={{ maxWidth: 880, margin: '0 auto' }}>
@@ -182,6 +191,7 @@ export default function IntegrationsPage() {
                     logo={meta.logo}
                     status={int.status}
                     configSummary={getConfigSummary(p, int.config)}
+                    badge={(p === 'zillow' || p === 'realtor_com') ? 'Powered by Zapier — takes 5 minutes to set up' : undefined}
                     onConnect={() => setModalProvider(p)}
                     onDisconnect={() => handleDisconnect(p)}
                     onTest={() => handleTest(p)}

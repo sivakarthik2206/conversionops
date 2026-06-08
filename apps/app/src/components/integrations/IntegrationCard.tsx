@@ -12,6 +12,7 @@ interface Props {
   logo: React.ReactNode;
   status: IntegrationStatus;
   configSummary?: string;
+  badge?: string;
   onConnect: () => void;
   onDisconnect: () => Promise<void>;
   onTest: () => Promise<{ success: boolean; message: string; latencyMs: number }>;
@@ -24,7 +25,7 @@ const STATUS_META: Record<IntegrationStatus, { color: string; label: string; dot
   error:        { color: 'var(--red)',    label: 'Error',         dot: '#ff4747' },
 };
 
-export function IntegrationCard({ provider, name, description, logo, status, configSummary, onConnect, onDisconnect, onTest, readOnly }: Props) {
+export function IntegrationCard({ provider, name, description, logo, status, configSummary, badge, onConnect, onDisconnect, onTest, readOnly }: Props) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; latencyMs: number } | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -73,6 +74,12 @@ export function IntegrationCard({ provider, name, description, logo, status, con
               </span>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0, lineHeight: 1.5 }}>{description}</p>
+            {badge && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, fontSize: 11, color: 'var(--text-4)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, borderRadius: 4, background: '#ff4a00', color: '#fff', fontSize: 9, fontWeight: 700 }}>Z</span>
+                {badge}
+              </span>
+            )}
             {configSummary && status === 'connected' && (
               <p style={{ fontSize: 12, color: 'var(--text-4)', margin: '6px 0 0', fontFamily: "'JetBrains Mono', monospace" }}>{configSummary}</p>
             )}

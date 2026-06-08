@@ -23,6 +23,20 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: 12 }}>
+      <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--bg-3)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
+        {n}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function InfoBox({ children }: { children: React.ReactNode }) {
   return <div style={{ padding: '12px 14px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 9, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6 }}>{children}</div>;
 }
@@ -52,7 +66,9 @@ export function ConnectModal({ provider, name, workspaceId, onClose, onSuccess, 
     setError('');
     setLoading(true);
     try {
-      const result = await onConnect(provider, data);
+      const isMarkOnlyProvider = provider === 'zillow' || provider === 'realtor_com' || provider === 'website';
+      const payload = isMarkOnlyProvider ? { ...data, configured: 'true' } : data;
+      const result = await onConnect(provider, payload);
       if (result.success) { onSuccess(); }
       else { setError(result.error ?? 'Connection failed. Check your credentials and try again.'); }
     } catch (e) {
@@ -165,31 +181,46 @@ export function ConnectModal({ provider, name, workspaceId, onClose, onSuccess, 
 
       case 'zillow':
       case 'realtor_com': {
-        const sourceName = provider === 'zillow' ? 'Zillow Premier Agent' : 'Realtor.com';
-        const triggerName = provider === 'zillow' ? 'New Lead in Zillow Premier Agent' : 'New Lead in Realtor.com';
+        const source = provider === 'zillow' ? 'zillow' : 'realtor_com';
+        const triggerApp = provider === 'zillow' ? 'Zillow Premier Agent' : 'Realtor.com';
+        const triggerEvent = provider === 'zillow' ? 'New Lead' : 'New Lead Inquiry';
+        const workspaceWebhookUrl = `${WEBHOOK_URL}?workspaceId=${workspaceId}&source=${source}`;
         return (
           <>
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-              Connect {sourceName} leads via Zapier — no API key needed.
+              No API key needed — connect {triggerApp} leads through Zapier in about 5 minutes.
             </p>
-            <InfoBox>
-              <strong style={{ color: 'var(--text-2)' }}>Setup steps:</strong>
-              <ol style={{ margin: '8px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <li><a href="https://zapier.com/sign-up" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Create a Zapier account</a> if you don't have one</li>
-                <li>Your ConversionOps webhook URL:<br />
-                  <div style={{ marginTop: 4 }}>
-                    <code style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-2)' }}>{WEBHOOK_URL}</code>
-                    {' '}<CopyButton text={WEBHOOK_URL} />
-                  </div>
-                </li>
-                <li>In Zapier, create a Zap:<br />
-                  Trigger: "{triggerName}"<br />
-                  Action: "Webhooks by Zapier → POST"<br />
-                  URL: paste the webhook URL above
-                </li>
-                <li>Click "Mark as connected" below</li>
-              </ol>
-            </InfoBox>
+
+            <Step n={1} title="Create your Zapier account">
+              <a href="https://zapier.com" target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, fontWeight: 600, textDecoration: 'none', marginTop: 4 }}>
+                Open Zapier <Icon name="arrow-right" size={13} stroke={2.5} />
+              </a>
+            </Step>
+
+            <Step n={2} title="Create a new Zap">
+              <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 6px' }}>
+                In Zapier, click <strong style={{ color: 'var(--text-2)' }}>Create Zap</strong>. Set the trigger to:
+              </p>
+              <InfoBox>
+                <strong style={{ color: 'var(--text-2)' }}>{triggerApp}</strong> → <strong style={{ color: 'var(--text-2)' }}>{triggerEvent}</strong>
+              </InfoBox>
+            </Step>
+
+            <Step n={3} title="Set the action">
+              <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 6px' }}>Add an action step:</p>
+              <InfoBox>
+                <strong style={{ color: 'var(--text-2)' }}>Webhooks by Zapier</strong> → <strong style={{ color: 'var(--text-2)' }}>POST</strong>
+                <UrlRow label="URL" url={workspaceWebhookUrl} />
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-4)' }}>Payload Type: <strong style={{ color: 'var(--text-3)' }}>JSON</strong></div>
+              </InfoBox>
+            </Step>
+
+            <Step n={4} title="Test and activate">
+              <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 0' }}>
+                Turn on your Zap and send a test lead. Then click <strong style={{ color: 'var(--text-2)' }}>Mark as connected</strong> below.
+              </p>
+            </Step>
           </>
         );
       }

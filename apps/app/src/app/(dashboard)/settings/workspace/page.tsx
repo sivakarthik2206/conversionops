@@ -1,18 +1,18 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Input, Modal, useToast } from '@conversionops/ui';
+import { Button, Input, Modal, Skeleton, useToast } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
 import { Icon } from '@/components/Icon';
 import { SettingsNav } from '@/components/layout/SettingsNav';
 
 const TIMEZONES = ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Phoenix','America/Anchorage','Pacific/Honolulu'];
 
-interface Workspace { name: string; timezone: string; twilioNumber: string | null; aiPaused: boolean; }
+interface Workspace { name: string; timezone: string; ownerEmail: string; twilioNumber: string | null; aiPaused: boolean; }
 
 export default function WorkspaceSettingsPage() {
   const { addToast } = useToast();
-  const { data: workspace, refetch } = useQuery<Workspace>({ queryKey: ['workspace'], queryFn: () => apiClient.get('/workspaces/me') });
+  const { data: workspace, refetch, isLoading, isError } = useQuery<Workspace>({ queryKey: ['workspace'], queryFn: () => apiClient.get('/workspaces/me') });
   const [name, setName] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [saving, setSaving] = useState(false);
@@ -45,6 +45,32 @@ export default function WorkspaceSettingsPage() {
     finally { setToggling(false); setPauseModal(false); }
   };
 
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', gap: 32 }}>
+        <SettingsNav />
+        <div style={{ flex: 1, maxWidth: 680, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Skeleton style={{ height: 60, width: 280 }} />
+          <Skeleton style={{ height: 220 }} />
+          <Skeleton style={{ height: 100 }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{ display: 'flex', gap: 32 }}>
+        <SettingsNav />
+        <div style={{ flex: 1, maxWidth: 680, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '80px 0' }}>
+          <Icon name="x-circle" size={28} stroke={1.5} style={{ color: 'var(--red)' }} />
+          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>Couldn&apos;t load workspace settings.</p>
+          <button onClick={() => void refetch()} className="btn-ghost">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', gap: 32 }}>
       <SettingsNav />
@@ -61,6 +87,14 @@ export default function WorkspaceSettingsPage() {
         <SettingsCard title="General" description="Basic information about your workspace.">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Input label="Workspace name" value={name} onChange={e => setName(e.target.value)} />
+            {workspace?.ownerEmail && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label className="eyebrow" style={{ color: 'var(--text-3)' }}>Owner email</label>
+                <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--bg-3)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-2)' }}>
+                  {workspace.ownerEmail}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <label className="eyebrow" style={{ color: 'var(--text-3)' }}>Timezone</label>
               <select

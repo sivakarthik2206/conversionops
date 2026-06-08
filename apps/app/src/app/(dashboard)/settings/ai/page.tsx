@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Input, useToast } from '@conversionops/ui';
+import { Input, Skeleton, useToast } from '@conversionops/ui';
 import { apiClient } from '@/lib/api-client';
 import { Icon } from '@/components/Icon';
 import { SettingsNav } from '@/components/layout/SettingsNav';
@@ -25,7 +25,7 @@ const DEFAULT_GREETING = "Hi {leadName}! I'm {agentName}, {agentFirstName}'s ass
 
 export default function AiSettingsPage() {
   const { addToast } = useToast();
-  const { data: workspace, refetch } = useQuery<Workspace>({ queryKey: ['workspace'], queryFn: () => apiClient.get('/workspaces/me') });
+  const { data: workspace, refetch, isLoading, isError } = useQuery<Workspace>({ queryKey: ['workspace'], queryFn: () => apiClient.get('/workspaces/me') });
   const [agentName, setAgentName] = useState('Alex');
   const [tone, setTone] = useState('friendly');
   const [customInstructions, setCustomInstructions] = useState('');
@@ -74,6 +74,31 @@ export default function AiSettingsPage() {
     } catch { addToast('Failed to update AI status', 'error'); }
     finally { setPausing(false); }
   };
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', gap: 32 }}>
+        <SettingsNav />
+        <div style={{ flex: 1, maxWidth: 680, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Skeleton style={{ height: 80, width: 320 }} />
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} style={{ height: 100 }} />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={{ display: 'flex', gap: 32 }}>
+        <SettingsNav />
+        <div style={{ flex: 1, maxWidth: 680, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '80px 0' }}>
+          <Icon name="x-circle" size={28} stroke={1.5} style={{ color: 'var(--red)' }} />
+          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>Couldn&apos;t load AI settings.</p>
+          <button onClick={() => void refetch()} className="btn-ghost">Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', gap: 32 }}>

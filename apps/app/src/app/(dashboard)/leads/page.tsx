@@ -18,7 +18,7 @@ function ScoreRing({ score, size = 28 }: { score: number; size?: number }) {
     <div style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--bg-4)" strokeWidth={2} />
-        <circle
+        <motion.circle
           cx={size/2}
           cy={size/2}
           r={r}
@@ -26,7 +26,9 @@ function ScoreRing({ score, size = 28 }: { score: number; size?: number }) {
           stroke={color}
           strokeWidth={2}
           strokeLinecap="round"
-          strokeDasharray={`${(score/100)*circ} ${circ}`}
+          initial={{ strokeDasharray: `0 ${circ}` }}
+          animate={{ strokeDasharray: `${(score/100)*circ} ${circ}` }}
+          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
           transform={`rotate(-90 ${size/2} ${size/2})`}
           style={{ filter: `drop-shadow(0 0 3px ${color})` }}
         />

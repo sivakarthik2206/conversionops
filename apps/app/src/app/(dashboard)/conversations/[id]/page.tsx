@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Skeleton, StatusBadge, EmptyState } from '@conversionops/ui';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { formatMessageTime } from '@/lib/format-time';
 import { Icon } from '@/components/Icon';
 import { useRealtime } from '@/hooks/useRealtime';
 import type { MessageNewEvent } from '@/hooks/useRealtime';
@@ -43,8 +44,12 @@ export default function ConversationDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [messageText, setMessageText] = useState('');
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const MESSAGE_LIMIT = 1600;
 
   const { data, isLoading, isError } = useQuery<ConversationDetail>({
     queryKey: ['conversation', params.id],
@@ -90,6 +95,7 @@ export default function ConversationDetailPage() {
     mutationFn: (content: string) =>
       apiClient.post(`/conversations/${params.id}/message`, { content }),
     onMutate: async (content: string) => {
+      setSendError(null);
       setMessageText('');
       // Optimistic update — add the message locally immediately
       const optimistic: Message = {
@@ -99,13 +105,16 @@ export default function ConversationDetailPage() {
         createdAt: new Date().toISOString(),
       };
       setLocalMessages(prev => [...prev, optimistic]);
+      return { content };
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['conversation', params.id] });
     },
-    onError: () => {
-      // Remove optimistic message on failure
+    onError: (err, _content, context) => {
+      // Remove optimistic message and restore the input content on failure
       setLocalMessages(prev => prev.filter(m => !m.id.startsWith('optimistic-')));
+      if (context?.content) setMessageText(context.content);
+      setSendError(err instanceof Error ? err.message : 'Failed to send message. Try again.');
     },
   });
 
@@ -125,8 +134,18 @@ export default function ConversationDetailPage() {
 
   const handleSend = useCallback(() => {
     const text = messageText.trim();
-    if (text) sendMessage.mutate(text);
+    if (text && text.length <= MESSAGE_LIMIT) sendMessage.mutate(text);
   }, [messageText, sendMessage]);
+
+  // Auto-grow textarea up to 4 lines
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const lineHeight = 21; // ~14px * 1.5 line-height
+    const maxHeight = lineHeight * 4 + 20; // 4 lines + padding
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+  }, [messageText]);
 
   if (isLoading) {
     return (
@@ -353,7 +372,7 @@ export default function ConversationDetailPage() {
                     padding: '0 4px',
                   }}
                 >
-                  {isOptimistic ? 'Sending…' : new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {isOptimistic ? 'Sending…' : formatMessageTime(msg.createdAt)}
                 </div>
               </motion.div>
             );
@@ -364,52 +383,62 @@ export default function ConversationDetailPage() {
 
       {/* Input */}
       {!isAIActive ? (
-        <div
-          className="surface-card"
-          style={{
-            marginTop: 12,
-            padding: 12,
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: 8,
-          }}
-        >
-          <textarea
-            value={messageText}
-            onChange={e => setMessageText(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey && messageText.trim()) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Type your message… (Enter to send · Shift+Enter for newline)"
-            rows={2}
-            style={{
-              flex: 1,
-              resize: 'none',
-              fontSize: 14,
-              fontFamily: 'inherit',
-              background: 'transparent',
-              outline: 'none',
-              border: 'none',
-              color: 'var(--text)',
-              caretColor: 'var(--accent)',
-              lineHeight: 1.5,
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!messageText.trim() || sendMessage.isPending}
-            className="btn-primary"
-            style={{ width: 40, padding: 0, height: 40, borderRadius: '50%' }}
-          >
-            {sendMessage.isPending ? (
-              <Icon name="loader" size={14} style={{ animation: 'spin 0.9s linear infinite' }} />
-            ) : (
-              <Icon name="send" size={14} stroke={2} />
-            )}
-          </button>
+        <div className="surface-card" style={{ marginTop: 12, padding: 12 }}>
+          {sendError && (
+            <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,71,71,0.08)', border: '1px solid rgba(255,71,71,0.25)', fontSize: 12, color: 'var(--red)' }}>
+              {sendError}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+            <textarea
+              ref={textareaRef}
+              value={messageText}
+              onChange={e => {
+                if (e.target.value.length <= MESSAGE_LIMIT) setMessageText(e.target.value);
+              }}
+              onKeyDown={e => {
+                const isSendCombo = (e.metaKey || e.ctrlKey) && e.key === 'Enter';
+                const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey;
+                if ((isSendCombo || isPlainEnter) && messageText.trim()) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Type a message… (Cmd/Ctrl+Enter to send)"
+              rows={1}
+              style={{
+                flex: 1,
+                resize: 'none',
+                fontSize: 14,
+                fontFamily: 'inherit',
+                background: 'transparent',
+                outline: 'none',
+                border: 'none',
+                color: 'var(--text)',
+                caretColor: 'var(--accent)',
+                lineHeight: 1.5,
+                maxHeight: 104,
+                overflowY: 'auto',
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!messageText.trim() || messageText.length > MESSAGE_LIMIT || sendMessage.isPending}
+              className="btn-primary"
+              style={{ width: 40, padding: 0, height: 40, borderRadius: '50%', flexShrink: 0 }}
+            >
+              {sendMessage.isPending ? (
+                <Icon name="loader" size={14} style={{ animation: 'spin 0.9s linear infinite' }} />
+              ) : (
+                <Icon name="send" size={14} stroke={2} />
+              )}
+            </button>
+          </div>
+          {messageText.length > 1400 && (
+            <div style={{ textAlign: 'right', marginTop: 6, fontSize: 11, color: messageText.length > MESSAGE_LIMIT ? 'var(--red)' : 'var(--text-4)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {messageText.length}/{MESSAGE_LIMIT}
+            </div>
+          )}
         </div>
       ) : (
         <div

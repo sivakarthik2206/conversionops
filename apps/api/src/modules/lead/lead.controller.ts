@@ -25,12 +25,17 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { TenantLeakageError } from '@conversionops/sdk-standards';
 
 const CreateLeadSchema = z.object({
-  source: z.enum(['ZILLOW', 'REALTOR_COM', 'WEB_FORM', 'MISSED_CALL', 'SMS_INBOUND', 'MANUAL', 'REACTIVATION', 'REFERRAL', 'OTHER']),
+  source: z.union([
+    z.enum(['ZILLOW', 'REALTOR_COM', 'WEB_FORM', 'MISSED_CALL', 'SMS_INBOUND', 'MANUAL', 'REACTIVATION', 'REFERRAL', 'OTHER']),
+    z.literal('TEST'),
+  ]),
   name: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email().optional(),
   externalId: z.string().optional(),
   sourcePayload: z.record(z.unknown()).optional(),
+  message: z.string().optional(),
+  test: z.boolean().optional(),
 });
 
 const AssignLeadSchema = z.object({
@@ -78,8 +83,24 @@ export class LeadController {
     @CurrentWorkspace() workspace: AuthenticatedWorkspace,
     @Body(new ZodValidationPipe(CreateLeadSchema)) dto: CreateLeadDto,
   ) {
+    // Test leads ("Send test lead" button) use a synthetic source so they don't
+    // require a Prisma enum migration — they're stored as MANUAL with a test marker.
+    const isTestLead = dto.source === 'TEST' || dto.test === true;
+    const source = isTestLead ? 'MANUAL' : dto.source;
+    const sourcePayload = isTestLead ? { ...dto.sourcePayload, test: true } : dto.sourcePayload;
+
     const result = await this.leadService.createLead(
-      new CreateLeadCommand(workspace.id, user.id, dto.source, dto.name, dto.phone, dto.email, dto.externalId, dto.sourcePayload),
+      new CreateLeadCommand(
+        workspace.id,
+        user.id,
+        source,
+        dto.name,
+        dto.phone,
+        dto.email,
+        dto.externalId,
+        sourcePayload,
+        isTestLead ? dto.message : undefined,
+      ),
     );
     if (!result.ok) throw new UnprocessableEntityException(result.error.message);
     return result.value;
