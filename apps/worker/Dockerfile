@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl && npm install -g pnpm@9 --quiet
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @conversionops/db exec prisma generate
+RUN pnpm --filter @conversionops/db run db:generate
 RUN pnpm run build:packages
 RUN pnpm --filter @conversionops/worker run build
 

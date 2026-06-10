@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from '@/components/Icon';
+import { formatFullDate, formatMessageTime } from '@/lib/format-time';
 
 // ─── Event types (single source of truth; re-exported by hooks/useRealtime) ──
 
@@ -186,7 +187,7 @@ function buildActivity(event: RealtimeEvent, data: unknown): ActivityItem | null
     }
     case 'appointment:booked': {
       const e = data as AppointmentBookedEvent;
-      const when = e.scheduledAt ? new Date(e.scheduledAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      const when = e.scheduledAt ? `${formatFullDate(e.scheduledAt)} at ${formatMessageTime(e.scheduledAt)}` : '';
       return {
         ...base,
         id: `appt:${e.appointmentId}:${now}`,
