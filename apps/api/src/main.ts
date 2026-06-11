@@ -15,7 +15,7 @@ import { nodeProfilingIntegration } from '@sentry/profiling-node';
 // Initialize OpenTelemetry before importing instrumented modules
 initTracing('conversionops-api');
 
-// Initialize Sentry — sample at 10% in production to control cost
+// Initialize Sentry Ã¢â‚¬â€ sample at 10% in production to control cost
 if (process.env['SENTRY_DSN']) {
   Sentry.init({
     dsn: process.env['SENTRY_DSN'],
@@ -43,8 +43,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://admin.conversionops.in',
 ];
 
-// Required env vars for production startup — fail fast if missing
-const REQUIRED_ENV_VARS_PROD = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'MAGIC_LINK_SECRET', 'APP_URL', 'RESEND_API_KEY'];
+// Required env vars for production startup Ã¢â‚¬â€ fail fast if missing
+const REQUIRED_ENV_VARS_PROD = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'APP_URL', 'RESEND_API_KEY'];
 
 async function bootstrap(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {
@@ -86,10 +86,10 @@ async function bootstrap(): Promise<void> {
   app.use(express.json({ limit: '512kb' }));
   app.use(express.urlencoded({ limit: '512kb', extended: true }));
 
-  // Request ID middleware — propagates x-request-id for end-to-end tracing
+  // Request ID middleware Ã¢â‚¬â€ propagates x-request-id for end-to-end tracing
   app.use((req: Request, res: Response, next: NextFunction) => {
     const incoming = req.headers['x-request-id'];
-    // Validate format to prevent header injection — only accept safe alphanumeric UUIDs
+    // Validate format to prevent header injection Ã¢â‚¬â€ only accept safe alphanumeric UUIDs
     const isValidId = typeof incoming === 'string' && /^[a-zA-Z0-9\-_]{1,64}$/.test(incoming);
     const requestId = isValidId ? (incoming as string) : `req_${randomUUID().replace(/-/g, '')}`;
     req.headers['x-request-id'] = requestId;
