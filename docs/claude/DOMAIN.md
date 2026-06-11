@@ -7,8 +7,8 @@ Not a chatbot. Not a CRM. Operational infrastructure.
 Every inbound lead gets an AI response in 60 seconds, 24/7.
 
 ## CUSTOMERS
-- Solo agents:       $3,500 setup + $750/month
-- Small brokerage:   $12,000 setup + $2,500/month (up to 15 agents)
+- Solo agents:       $500 setup + $750/month
+- Small brokerage:   $2,500 setup + $2,500/month (up to 15 agents)
 - Enterprise:        $25,000 setup + $5,000/month (unlimited)
 
 ## TARGET MARKETS (priority)

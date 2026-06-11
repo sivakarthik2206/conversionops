@@ -25,7 +25,7 @@ const PLANS: Plan[] = [
   {
     name: 'Solo Agent',
     badge: null,
-    setup: '$3,500',
+    setup: '$500',
     monthly: '$750',
     monthlyNum: 750,
     desc: 'For agents ready to stop losing leads at night and on weekends.',
@@ -44,7 +44,7 @@ const PLANS: Plan[] = [
   {
     name: 'Small Brokerage',
     badge: 'Most popular',
-    setup: '$12,000',
+    setup: '$2,500',
     monthly: '$2,500',
     monthlyNum: 2500,
     desc: 'For brokerages routing leads across agents with full analytics.',
